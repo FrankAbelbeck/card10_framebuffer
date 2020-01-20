@@ -34,8 +34,7 @@
 // data structures
 //------------------------------------------------------------------------------
 
-/** Data structure of a 2D point, given as homogeneous coordinates;
- * Components are assumed to be pixel-based.
+/** Data structure of a 2D point, given as homogeneous coordinates.
  */
 typedef struct {
 	int32_t x;
@@ -61,50 +60,52 @@ typedef struct {
  * This calculates p.x /= p.z, p.y /= p.z; it sets values to INT32_MAX/INT32_MIN if p.z==0.
  * 
  * @param p A PointPP.
+ * @param zExpected An integer; value of p.z after division.
  * @returns A PointPP.
  */
 PointPP divPerspective(PointPP p, int32_t zExpected);
 
 /** Multiply a MatrixPP with a PointPP, resulting in a modified PointPP.
  * 
- * @param m A MatrixPP.
- * @param p A PointPP.
- * @returns A PointPP, result of m*p.
+ * @param m A MatrixPP structure.
+ * @param p A PointPP, values normalised to 1024 (i.e. -0.5 would be -512).
+ * @returns A PointPP, result of m*p; normalised to 1024, too.
  */
 PointPP mulMatrixPointPP(MatrixPP m, PointPP p);
 
 /** Multiply a MatrixPP with a MatrixPP, resulting in a modified MatrixPP.
  * 
- * @param m A MatrixPP.
- * @param p A MatrixPP.
- * @returns A MatrixPP, result of a*b.
+ * @param m A MatrixPP structure.
+ * @param p A MatrixPP structure.
+ * @returns A MatrixPP structure, result of a*b.
  */
 MatrixPP mulMatrixMatrixPP(MatrixPP a, MatrixPP b);
 
 /** Multiply a MatrixPP with a scalar, resulting in a modified MatrixPP.
  * 
  * @param scalar An integer.
- * @param m A MatrixPP.
- * @returns A MatrixPP, result of scalar*m.
+ * @param m A MatrixPP structure.
+ * @returns A MatrixPP structure, result of scalar*m.
  */
 MatrixPP mulScalarMatrixPP(int32_t scalar, MatrixPP m);
 
 /** Multiply a PointPP with a scalar, resulting in a modified PointPP.
  * 
  * @param scalar An integer.
- * @param p A PointPP.
- * @returns A PointPP, result of scalar*p.
+ * @param p A PointPP, values normalised to 1024 (i.e. -0.5 would be -512).
+ * @returns A PointPP, result of scalar*p; normalised to 1024, too.
  */
 PointPP mulScalarPointPP(int32_t scalar, PointPP p);
 
 /** Invert a MatrixPP.
  * 
- * @param m A MatrixPP.
- * @param result A pointer to a MatrixPP.
+ * @param m A MatrixPP structure.
+ * @returns A MatrixPP structure.
  */
 MatrixPP invertMatrixPP(MatrixPP m);
 
-/** Calculate a MatrixPP for the following operation:
+
+/** Calculate a MatrixPP structure for the following operation:
  * Rotation by angle about arbitrary point.
  * 
  * @param angle An angle in degrees.
@@ -112,7 +113,7 @@ MatrixPP invertMatrixPP(MatrixPP m);
  */
 MatrixPP getMatrixRotatePP(int16_t angle);
 
-/** Calculate a MatrixPP for the following operation:
+/** Calculate a MatrixPP structure for the following operation:
  * Scale about origin by given factors in both x and y direction.
  * 
  * @param factorX Factor for width scaling, normalised to 1024 (i.e. -0.5 would be -512).
@@ -121,16 +122,16 @@ MatrixPP getMatrixRotatePP(int16_t angle);
  */
 MatrixPP getMatrixScalePP(int16_t factorX, int16_t factorY);
 
-/** Calculate a MatrixPP for the following operation:
+/** Calculate a MatrixPP structure for the following operation:
  * Translation by given offset.
  * 
- * @param x x component of offset.
- * @param y y component of offset.
+ * @param x x component of offset, pixel-based.
+ * @param y y component of offset, pixel-based.
  * @returns A transformation MatrixPP.
  */
 MatrixPP getMatrixTranslatePP(int16_t x, int16_t y);
 
-/** Calculate a MatrixPP for the following operation:
+/** Calculate a MatrixPP structure for the following operation:
  * Shear in x direction.
  * 
  * @param factor Factor for x shearing, normalised to 1024 (i.e. -0.5 would be -512).
@@ -138,7 +139,7 @@ MatrixPP getMatrixTranslatePP(int16_t x, int16_t y);
  */
 MatrixPP getMatrixShearXPP(int16_t factor);
 
-/** Calculate a MatrixPP for the following operation:
+/** Calculate a MatrixPP structure for the following operation:
  * Shear in y direction.
  * 
  * @param factor Factor for y shearing, normalised to 1024 (i.e. -0.5 would be -512).
@@ -146,7 +147,7 @@ MatrixPP getMatrixShearXPP(int16_t factor);
  */
 MatrixPP getMatrixShearYPP(int16_t factor);
 
-/** Calculate a MatrixPP for the following operation:
+/** Calculate a MatrixPP structure for the following operation:
  * Perspective projection in x and/or y direction.
  * 
  * Note: factorX=0 factorY=0 factorZ=1024 = unit matrix
@@ -174,9 +175,10 @@ MatrixPP getMatrixPerspective(int16_t factorX, int16_t factorY, int16_t factorZ)
  * @param surface Pointer to a Surface.
  * @param sprite Pointer to a Surface.
  * @param destination Pointer to a Surface.
- * @param matrix 3-by-3 Transformation MatrixPP.
+ * @param matrix 3-by-3 Transformation MatrixPP structure.
  * @param alpha Transparency of the sprite during composition (multiplied with the sprite's own transparency).
  * @param mode A mode as defined by BLEND_*
+ * @param boundingBoxSprite BoundingBox of the sprite are that should be displayed; use getBoundingBoxSurface(sprite) to display the entire sprite.
  * @returns A BoundingBox, receiving information on the transformed sprite's bounding box. If an error occurs, this is set to (0,0,0,0).
  */
 BoundingBox composePP(Surface *surface, Surface *sprite, Surface *destination, MatrixPP matrix, uint8_t alpha, uint8_t mode, BoundingBox boundingBoxSprite);

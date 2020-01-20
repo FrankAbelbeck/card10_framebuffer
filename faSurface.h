@@ -50,8 +50,8 @@ typedef struct {
 /** Multiply a Matrix with a Point, resulting in a modified Point.
  * 
  * @param m A Matrix.
- * @param p A Point.
- * @returns A Point, result of m*p.
+ * @param p A Point, values normalised to 1024 (i.e. -0.5 would be -512).
+ * @returns A Point, result of m*p; normalised to 1024, too.
  */
 Point mulMatrixPoint(Matrix m, Point p);
 
@@ -74,8 +74,8 @@ Matrix mulScalarMatrix(int32_t scalar, Matrix m);
 /** Multiply a Point with a scalar, resulting in a modified Point.
  * 
  * @param scalar An integer.
- * @param p A Point.
- * @returns A Point, result of scalar*p.
+ * @param p A Point, values normalised to 1024 (i.e. -0.5 would be -512).
+ * @returns A Point, result of scalar*p; normalised to 1024, too.
  */
 Point mulScalarPoint(int32_t scalar, Point p);
 
@@ -86,7 +86,7 @@ Point mulScalarPoint(int32_t scalar, Point p);
  */
 Matrix invertMatrix(Matrix m);
 
-/** Calculate a Matrix for the following operation:
+/** Calculate a Matrix structure for the following operation:
  * Rotation by angle about arbitrary point.
  * 
  * @param angle An angle in degrees.
@@ -94,7 +94,7 @@ Matrix invertMatrix(Matrix m);
  */
 Matrix getMatrixRotate(int16_t angle);
 
-/** Calculate a Matrix for the following operation:
+/** Calculate a Matrix structure for the following operation:
  * Scale about origin by given factors in both x and y direction.
  * 
  * @param factorX Factor for width scaling, normalised to 1024 (i.e. -0.5 would be -512).
@@ -103,16 +103,16 @@ Matrix getMatrixRotate(int16_t angle);
  */
 Matrix getMatrixScale(int16_t factorX, int16_t factorY);
 
-/** Calculate a Matrix for the following operation:
+/** Calculate a Matrix structure for the following operation:
  * Translation by given offset.
  * 
- * @param x x component of offset.
- * @param y y component of offset.
+ * @param x x component of offset, pixel-based.
+ * @param y y component of offset, pixel-based.
  * @returns A transformation Matrix.
  */
 Matrix getMatrixTranslate(int16_t x, int16_t y);
 
-/** Calculate a Matrix for the following operation:
+/** Calculate a Matrix structure for the following operation:
  * Shear in x direction.
  * 
  * @param factor Factor for x shearing, normalised to 1024 (i.e. -0.5 would be -512).
@@ -120,7 +120,7 @@ Matrix getMatrixTranslate(int16_t x, int16_t y);
  */
 Matrix getMatrixShearX(int16_t factor);
 
-/** Calculate a Matrix for the following operation:
+/** Calculate a Matrix structure for the following operation:
  * Shear in y direction.
  * 
  * @param factor Factor for y shearing, normalised to 1024 (i.e. -0.5 would be -512).
@@ -145,6 +145,7 @@ Matrix getMatrixShearY(int16_t factor);
  * @param matrix 3-by-3 Transformation Matrix.
  * @param alpha Transparency of the sprite during composition (multiplied with the sprite's own transparency).
  * @param mode A mode as defined by BLEND_*
+ * @param boundingBoxSprite BoundingBox of the sprite are that should be displayed; use getBoundingBoxSurface(sprite) to display the entire sprite.
  * @returns A BoundingBox, receiving information on the transformed sprite's bounding box. If an error occurs, this is set to (0,0,0,0).
  */
 BoundingBox compose(Surface *surface, Surface *sprite, Surface *destination, Matrix matrix, uint8_t alpha, uint8_t mode, BoundingBox boundingBoxSprite);
