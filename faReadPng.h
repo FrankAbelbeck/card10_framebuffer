@@ -1,10 +1,9 @@
 #ifndef _FAREADPNG_H
 #define _FAREADPNG_H
-
 /**
  * @file
  * @author Frank Abelbeck <frank.abelbeck@googlemail.com>
- * @version 2019-12-01
+ * @version 2019-12-14
  * 
  * @section License
  * 
@@ -28,6 +27,7 @@
 
 #include <stdint.h> // uses: int8_t, uint8_t, int16_t, uint16_t, uint32_t
 #include <stdbool.h> // uses: bool, true, false
+#include "faSurface.h"
 
 //------------------------------------------------------------------------------
 // constants: error return codes
@@ -206,20 +206,6 @@
 // PNG reader data structures ("self", image and pixel data)
 //------------------------------------------------------------------------------
 
-/** Data structure of a card10 display pixel. */
-typedef struct {
-	uint16_t rgb565; ///< RGB information (5 bits red, 6 bits green, 5 bits blue).
-	uint8_t  alpha;  ///< Transparency information (0=transparent..255=opaque).
-} RGBA5658;
-
-/** Data structure of an image. */
-typedef struct {
-	uint16_t width;   ///< Width in pixels.
-	uint16_t height;  ///< Height in pixels.
-	uint16_t *rgb565; ///< Image data (address of a RGB565 pixel array).
-	uint8_t  *alpha;  ///< Alpha values (address of a byte array; might be NULL).
-} Image;
-
 /** Data structure of processing state variables. */
 typedef struct PngData {
 	// palette data
@@ -231,7 +217,8 @@ typedef struct PngData {
 	uint8_t   samplesPerPixel; ///< Number of samples per pixel.
 	RGBA5658  (*funPixConv)(struct PngData*,uint16_t); ///< Address of a pixel conversion function.
 	// chunk and file management
-	FILE      *file; ///< Address of a file stream.
+// 	FILE      *file; ///< Address of a file stream.
+	int       file; ///< Address of a file stream.
 	uint32_t  lenChunk; ///< Length of current chunk
 	uint8_t   typeChunk; ///< Type of current chunk
 	// zlib management
@@ -270,18 +257,6 @@ PngData* constructPngData();
  * @param self A PngData structure.
  */
 void destructPngData(PngData **self);
-
-/** Constructor: create and initialise an Image data structure.
- * 
- * @returns An initialised Image data structure.
- */
-Image* constructImage();
-
-/** Destructor: free any allocated memory in an Image data structure.
- * 
- * @param image An Image data structure.
- */
-void destructImage(Image **image);
 
 /** Pixel conversion routine: RGBA5658 from 1 bit greyscale value.
  * 
@@ -556,6 +531,15 @@ uint16_t PaethPredictor(uint16_t a, uint16_t b, uint16_t c);
  *     - any error reported by seekChunk().
  *     - any error reported by readScanline().
  */
-int8_t readPNG(PngData *self, char *filename, Image *image);
+int8_t readPNG(PngData *self, char *filename, Surface *image);
 
-#endif // _READPNG_H
+/** PNG reading wrapper function. Load the PNG file with given filename.
+ * 
+ * Manages PngData automatically.
+ * 
+ * @param filename Address of a filename string (char array).
+ * @returns A pointer to a surface with the image bitmap data. Might be NULL if something went wrong.
+ */
+Surface *loadImage(char *filename);
+
+#endif // _FAREADPNG_H

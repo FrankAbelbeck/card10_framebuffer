@@ -1,7 +1,7 @@
 /**
  * @file
  * @author Frank Abelbeck <frank.abelbeck@googlemail.com>
- * @version 2019-12-01
+ * @version 2019-12-14
  * 
  * @section License
  * 
@@ -23,14 +23,15 @@
  * Stream-oriented PNG reading library tailored to the card10 badge hardware.
  */
 
-#include <stdio.h>  // uses: printf(), fopen(), fread(), fseek(), fclose()
+#include "epicardium.h" // uses epic_file* functions
+
 #include <stdint.h> // uses: int8_t, uint8_t, int16_t, uint16_t, uint32_t
-#include <stdlib.h> // uses: EXIT_SUCCESS, EXIT_FAILURE, malloc(), free()
+#include <stdlib.h> // uses: malloc(), free()
 #include <stdbool.h> // uses: bool, true, false
 #include "faReadPng.h"
 
 //------------------------------------------------------------------------------
-// methods for PngData and Image structures
+// methods for PngData structures
 //------------------------------------------------------------------------------
 
 // PngData constructor: create and initialise a PngData structure
@@ -43,7 +44,7 @@ PngData* constructPngData() {
 		pngdata->scanlineCurrent = NULL;
 		pngdata->scanlinePrevious = NULL;
 		pngdata->funPixConv = NULL;
-		pngdata->file = NULL;
+ 		pngdata->file = -1;
 		pngdata->lenChunk = 0;
 		pngdata->typeChunk = CHUNK_UNKNOWN;
 		pngdata->state = STATE_BEGIN;
@@ -63,34 +64,15 @@ PngData* constructPngData() {
 
 // PngData destructor: clear any allocated memory, close the file and clear the structure
 void destructPngData(PngData **self) {
-	if ((*self)->file != NULL) fclose((*self)->file);
+	if ((*self)->file >= 0)
+		if (epic_file_close((*self)->file) >= 0)
+			(*self)->file = -1;
 	free((*self)->palette);
 	free((*self)->scanlineCurrent);
 	free((*self)->scanlinePrevious);
 	free((*self)->codesHuffmanLength);
 	free((*self)->codesHuffmanDistance);
 	free((*self)->bufferInflate);
-	free(*self);
-	*self = NULL;
-}
-
-// Image constructor: create and initialise an Image structure
-Image* constructImage() {
-	Image *image = NULL;
-	image = (Image*)malloc(sizeof(Image));
-	if (image != NULL) {
-		image->width = 0;
-		image->height = 0;
-		image->rgb565 = NULL;
-		image->alpha = NULL;
-	}
-	return image;
-}
-
-// Image destructor: clear any allocated memory and deallocate structure
-void destructImage(Image **self) {
-	free((*self)->rgb565);
-	free((*self)->alpha);
 	free(*self);
 	*self = NULL;
 }
@@ -251,11 +233,11 @@ RGBA5658 convertPixelRGBA16(PngData *self, uint16_t x) {
 int8_t readChunkHeader(PngData *self) {
 	// read length (32 Bit Big Endian)
 	uint8_t buffer32[4];
-	if (fread(&buffer32,4,1,self->file) != 1) return RET_READ;
+	if (epic_file_read(self->file,&buffer32,4) != 4) return RET_READ;
 	self->lenChunk = (uint32_t)BIGENDIAN32(buffer32);
 	
 	// read and parse type string (4 chars)
-	if (fread(&buffer32,4,1,self->file) != 1) return RET_READ;
+	if (epic_file_read(self->file,&buffer32,4) != 4) return RET_READ;
 	// primitive prefix tree instead of using strncmp()
 	self->typeChunk = CHUNK_UNKNOWN;
 	switch (buffer32[0]) {
@@ -302,7 +284,7 @@ int8_t readChunkHeader(PngData *self) {
 int8_t seekChunk(PngData *self, uint8_t typeChunkRequested) {
 	int8_t retval;
 	do {
-		if (fseek(self->file,self->lenChunk+4,SEEK_CUR) != 0) return RET_SEEK;
+		if (epic_file_seek(self->file,self->lenChunk+4,SEEK_CUR) != 0) return RET_SEEK;
 		retval = readChunkHeader(self);
 		if (retval != RET_OK) return retval;
 	} while (self->typeChunk != typeChunkRequested);
@@ -328,7 +310,7 @@ int8_t readBytesIDAT(PngData *self, uint8_t *buffer, uint16_t numBytes) {
 		if (self->lenChunk < numBytesRemaining) {
 			// chunk holds fewer bytes than needed:
 			// read only lenChunk bytes, update bytes counters and seek new IDAT chunk
-			if (fread(&buffer[numBytesRead],self->lenChunk,1,self->file) != 1) return RET_READ;
+			if (epic_file_read(self->file,&buffer[numBytesRead],self->lenChunk) != self->lenChunk) return RET_READ;
 			numBytesRemaining -= self->lenChunk;
 			numBytesRead += self->lenChunk;
 			self->lenChunk = 0;
@@ -337,7 +319,7 @@ int8_t readBytesIDAT(PngData *self, uint8_t *buffer, uint16_t numBytes) {
 		} else {
 			// chunk holds enough bytes to satisfy request:
 			// read request number of bytes and 
-			if (fread(&buffer[numBytesRead],numBytesRemaining,1,self->file) != 1) return RET_READ;
+			if (epic_file_read(self->file,&buffer[numBytesRead],numBytesRemaining) != numBytesRemaining) return RET_READ;
 			numBytesRead += numBytesRemaining;
 			self->lenChunk -= numBytesRemaining;
 			numBytesRemaining = 0;
@@ -377,7 +359,7 @@ int8_t readBitsIDAT(PngData *self, uint8_t numBits) {
 	// read as many whole bytes as necessary
 	while (numBits > 8) {
 		if (self->lenChunk > 0) {
-			if (fread(&self->bufferBits,1,1,self->file) != 1) return RET_READ;
+			if (epic_file_read(self->file,&self->bufferBits,1) != 1) return RET_READ;
 			self->lenChunk--;
 			self->valueBufferBits |= self->bufferBits << bitsRead;
 			bitsRead += 8;
@@ -396,7 +378,7 @@ int8_t readBitsIDAT(PngData *self, uint8_t numBits) {
 			retval = seekChunk(self,CHUNK_IDAT);
 			if (retval != RET_OK) return retval;
 		}
-		if (fread(&self->bufferBits,1,1,self->file) != 1) return RET_READ;
+		if (epic_file_read(self->file,&self->bufferBits,1) != 1) return RET_READ;
 		self->lenChunk--;
 		self->bitsRemaining = 8 - numBits;
 		self->valueBufferBits |= (self->bufferBits & ((1 << numBits)-1)) << bitsRead;
@@ -445,7 +427,7 @@ int8_t generateHuffmanCodes(uint16_t numLengths, uint8_t *lengths, uint32_t **co
 	// ...distance codes: 15 bits
 	// => 15 bits maximum
 	uint8_t bl_count[] = {0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0};
-	uint16_t next_code[] = {0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0};
+	uint16_t next_code[] = {0, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0};
 	uint16_t i,k,l,length,codebits;
 	uint32_t entry;
 	uint32_t *codes;
@@ -459,7 +441,7 @@ int8_t generateHuffmanCodes(uint16_t numLengths, uint8_t *lengths, uint32_t **co
 	for (i=0; i < numLengths; i++)
 		bl_count[lengths[i]]++;
 	
-	// step 2: find numerical value of smalles code for each code length
+	// step 2: find numerical value of smallest code for each code length
 	uint16_t code = 0;
 	bl_count[0] = 0;
 	for (i=1; i <= 15; i++) {
@@ -952,19 +934,19 @@ uint16_t PaethPredictor(uint16_t a, uint16_t b, uint16_t c) {
 }
 
 // central PNG reading function
-int8_t readPNG(PngData *self, char *filename, Image *image) {
+int8_t readPNG(PngData *self, char *filename, Surface *image) {
 	// local vars
 	int8_t   retval;
 	uint8_t  magicBytes[8] = {0};
 	uint16_t x;
 	
 	// open file
-	self->file = fopen(filename,"rb");
-	if (self->file == NULL) return RET_OPEN;
+	self->file = epic_file_open(filename,"rb");
+	if (self->file < 0) return RET_OPEN;
 	
 	// read and check first eight magic bytes
 	// should be 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
-	if (fread(magicBytes,8,1,self->file) != 1) return RET_READ;
+ 	if (epic_file_read(self->file,magicBytes,8) != 8) return RET_READ;
 	if (magicBytes[0] != 0x89 || magicBytes[1] != 0x50 || \
 		magicBytes[2] != 0x4e || magicBytes[3] != 0x47 || \
 		magicBytes[4] != 0x0d || magicBytes[5] != 0x0a || \
@@ -978,13 +960,13 @@ int8_t readPNG(PngData *self, char *filename, Image *image) {
 	// parse header:
 	//  - first reading pass: 4 byte width, 4 byte height,
 	//  - second reading pass: 1 byte each for bit depth, colour type, compression method, filter method, interlace method
-	if (fread(magicBytes,8,1,self->file) != 1) return RET_READ;
+	if (epic_file_read(self->file,magicBytes,8) != 8) return RET_READ;
 	self->lenChunk -= 8;
 	image->width = (uint16_t)BIGENDIAN32(&magicBytes[0]);
 	image->height = (uint16_t)BIGENDIAN32(&magicBytes[4]);
 	if (image->width == 0 || image->height == 0) return RET_DIMENSIONS;
 						
-	if (fread(magicBytes,5,1,self->file) != 1) return RET_READ;
+	if (epic_file_read(self->file,magicBytes,5) != 5) return RET_READ;
 	self->lenChunk -= 5;
 	// magicBytes[0] = bit depth (1,2,4,8,16)
 	// magicBytes[1] = colour type (0,2,3,4,6)
@@ -994,7 +976,6 @@ int8_t readPNG(PngData *self, char *filename, Image *image) {
 	if (magicBytes[2]) return RET_COMPRESSION_METHOD;
 	if (magicBytes[3]) return RET_FILTER_METHOD;
 	if (magicBytes[4] > 1) return RET_INTERLACE_METHOD;
-	bool hasAlpha = false;
 	uint8_t bitDepth = magicBytes[0];
 	uint8_t pass = magicBytes[4];
 	uint8_t bytesPerPixel;
@@ -1068,14 +1049,13 @@ int8_t readPNG(PngData *self, char *filename, Image *image) {
 			for (x=0; x <= self->sizePalette; x++) {
 				// read palette entries from chunk; the checks above ensure
 				// that the chunk holds enough bytes --> no lenChunk checking
-				if (fread(magicBytes,3,1,self->file) != 1) return RET_READ;
+				if (epic_file_read(self->file,magicBytes,3) != 3) return RET_READ;
 				self->lenChunk -= 3;
 				self->palette[x] = RGB565(magicBytes[0],magicBytes[1],magicBytes[2]);
 			}
 			break;
 		case COLOURTYPE__GREY_A:
 			samplesPerPixel = 2;
-			hasAlpha = true;
 			switch (bitDepth) {
 				case 8:
 					self->funPixConv = convertPixelGreyA8;
@@ -1091,7 +1071,6 @@ int8_t readPNG(PngData *self, char *filename, Image *image) {
 			break;
 		case COLOURTYPE__RGB_A:
 			samplesPerPixel = 4;
-			hasAlpha = true;
 			switch (bitDepth) {
 				case 8:
 					self->funPixConv = convertPixelRGBA8;
@@ -1115,17 +1094,14 @@ int8_t readPNG(PngData *self, char *filename, Image *image) {
 	retval = seekChunk(self,CHUNK_IDAT);
 	if (retval != RET_OK) return retval;
 	
-	// no image data yet: allocate memory for the image, with 16-bit pixels
+	// no image data yet: allocate memory for the image, with 16-bit pixels and one 8-bit alpha channel
 	if (image->rgb565 != NULL) free(image->rgb565);
 	image->rgb565 = (uint16_t*)malloc(image->width * image->height * 2);
 	if (image->rgb565 == NULL) return RET_MALLOC_IMAGE;
 	
-	if (hasAlpha) {
-		// source file has pixel-based alpha information: create alpha channel
-		if (image->alpha != NULL) free(image->alpha);
-		image->alpha = (uint8_t*)malloc(image->width * image->height);
-		if (image->alpha == NULL) return RET_MALLOC_IMAGE;
-	}
+	if (image->alpha != NULL) free(image->alpha);
+	image->alpha = (uint8_t*)malloc(image->width * image->height);
+	if (image->alpha == NULL) return RET_MALLOC_IMAGE;
 	
 	// allocate scanline buffers (largest dimension, kind of memory pool)
 	// w*spp*bpp --> bits --> bytes + 1 filter type byte
@@ -1139,7 +1115,11 @@ int8_t readPNG(PngData *self, char *filename, Image *image) {
 	// interlace method = 0: no interlacing, thus pass=0, startNewPass sets current dimensions to image dimensions
 	// interlace method = 1: ADAM7 interlacing, thus pass=1, startNewPass sets current dimensions to first pass dimensions
 	// current dimensions (of subimage, if interlaced) determine processed scanline width
-	uint16_t x0,y,dx,dy,widthCurrent,pixX,pixA,pixB,pixC;
+	uint16_t x0 = 0;
+	uint16_t y = 0;
+	uint16_t dx = 1;
+	uint16_t dy = 1;
+	uint16_t widthCurrent,pixX,pixA,pixB,pixC;
 	uint32_t sizeScanlineCurrent;
 	uint32_t indexImage;
 	uint8_t *tmpPtr;
@@ -1259,7 +1239,7 @@ int8_t readPNG(PngData *self, char *filename, Image *image) {
 			for (x = 0; x < widthCurrent; x++) {
 				colour = self->funPixConv(self,x);
 				image->rgb565[indexImage] = colour.rgb565;
-				if (hasAlpha) image->alpha[indexImage] = colour.alpha; 
+				image->alpha[indexImage] = colour.alpha; 
 				indexImage += dx;
 			}
 			// 4) swap scanline buffers
@@ -1274,44 +1254,23 @@ int8_t readPNG(PngData *self, char *filename, Image *image) {
 }
 
 //------------------------------------------------------------------------------
-// main function
+// Surface construction via image loading
 //------------------------------------------------------------------------------
 
-int main(int argc, char **argv) {
-	if (argc != 2) {
-		printf("usage: %s FILENAME\n",argv[0]);
-		return EXIT_FAILURE;
-	}
+Surface *loadImage(char *filename) {
+	Surface *image = constructSurface();
+	if (image == NULL) return NULL;
 	
 	PngData *data = constructPngData();
-	Image *image = constructImage();
+	if (data == NULL) return NULL;
 	
-	int retval = readPNG(data,argv[1],image);
-	
-	if (retval != RET_OK) {
-/*
-		printf("%d\n",retval);
-*/
-		retval = EXIT_FAILURE;
-	} else {
-/*
-		printf("image w=%i h=%i\n",image->width,image->height);
- 		for(uint16_t i=0; i < image->width*image->height; i++) {
- 			if (i % image->width == 0) printf("\n");
-			if (image->rgb565[i] == 0x0000)
-				printf(" ");
-			else if (image->rgb565[i] == 0xffff)
-				printf("#");
-			else
-				printf("-");
- 		}
-		printf("\n");
-*/
-		retval = EXIT_SUCCESS;
-	}
-	
+	int retval = readPNG(data,filename,image);
 	destructPngData(&data);
-	destructImage(&image);
-	
-	return retval;
+	if (retval == RET_OK) {
+		return image;
+	} else {
+		destructSurface(&image);
+		return NULL;
+	}
 }
+
