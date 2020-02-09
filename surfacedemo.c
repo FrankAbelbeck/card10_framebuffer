@@ -1,7 +1,7 @@
 /**
  * @file
  * @author Frank Abelbeck <frank.abelbeck@googlemail.com>
- * @version 2020-01-20
+ * @version 2020-02-06
  * 
  * @section License
  * 
@@ -45,46 +45,64 @@ void updateLED(uint8_t load) {
 
 int main(int argc, char **argv) {
 	union disp_framebuffer *framebuffer;
-	BoundingBox boundingBox, boundingBoxLogo;
+	SurfaceMod *mask;
 	Matrix matrix;
 	MatrixPP matrixPP;
+	Point p;
 	Surface *background, *frontbuffer, *sprite, *logo; 
+	BoundingBox bbSprite;
 	int16_t scale,x,y,alpha,angle;
 	int8_t dx,dy,dalpha,dangle,dscale;
 	
 	printf("starting surfacedemo...\n");
 	
+	// prepare surface update mask
+	printf("creating update mask\n");
+	mask = surfaceModConstruct(DISP_HEIGHT);
+	if (mask == NULL) {
+		printf("could not allocate update mask\n");
+		epic_exit(1);
+	}
+	
 	// prepare framebuffer and sprite
-	framebuffer = constructFramebuffer(0);
+	printf("creating framebuffer\n");
+	framebuffer = framebufferConstruct(0);
 	if (framebuffer == NULL) {
 		printf("could not allocate framebuffer\n");
+		surfaceModDestruct(&mask);
 		epic_exit(1);
 	}
 	
 	// set up stars background
-	background = loadImage("png/stars.png");
+	printf("creating background surface\n");
+	background = pngDataLoad("png/stars.png");
 	if (background == NULL) {
 		printf("could not set-up background surface\n");
-		destructFramebuffer(&framebuffer);
+		surfaceModDestruct(&mask);
+		framebufferDestruct(&framebuffer);
 		epic_exit(1);
 	}
 	
 	// set up front buffer surface
-	frontbuffer = cloneSurface(background);
+	printf("creating frontbuffer surface\n");
+	frontbuffer = surfaceClone(background);
 	if (frontbuffer == NULL) {
 		printf("could not set-up frontbuffer surface\n");
-		destructFramebuffer(&framebuffer);
-		destructSurface(&background);
+		surfaceModDestruct(&mask);
+		framebufferDestruct(&framebuffer);
+		surfaceDestruct(&background);
 		epic_exit(1);
 	}
 	
 	// set up the opening title
-	sprite = loadImage("png/title.png");
+	printf("loading title image\n");
+	sprite = pngDataLoad("png/title.png");
 	if (sprite == NULL) {
 		printf("could not set-up title sprite surface\n");
-		destructFramebuffer(&framebuffer);
-		destructSurface(&background);
-		destructSurface(&frontbuffer);
+		surfaceModDestruct(&mask);
+		framebufferDestruct(&framebuffer);
+		surfaceDestruct(&background);
+		surfaceDestruct(&frontbuffer);
 		epic_exit(1);
 	}
 	printf("loop: star wars titles...\n");
@@ -94,22 +112,25 @@ int main(int argc, char **argv) {
 		matrix = mulMatrixMatrix(getMatrixTranslate(80,40),matrix);
 		
 		if (scale > 255)
-			boundingBox = compose(background,sprite,frontbuffer,matrix,255,BLEND_OVER,getBoundingBoxSurface(sprite));
+			compose(background,sprite,frontbuffer,matrix,255,BLEND_OVER,boundingBoxGet(sprite),mask);
 		else
-			boundingBox = compose(background,sprite,frontbuffer,matrix,scale,BLEND_OVER,getBoundingBoxSurface(sprite));
+			compose(background,sprite,frontbuffer,matrix,scale,BLEND_OVER,boundingBoxGet(sprite),mask);
 		
-		copySurfaceToFramebuffer(frontbuffer,framebuffer);
-		redraw(framebuffer);
-		copySurfaceAreaToSurface(background,frontbuffer,boundingBox);
+		framebufferCopySurface(framebuffer,frontbuffer);
+		framebufferRedraw(framebuffer);
+		surfaceCopy(background,frontbuffer,mask);
+		surfaceModClear(mask);
 	}
 	
-	destructSurface(&sprite);
-	sprite = loadImage("png/text.png");
+	surfaceDestruct(&sprite);
+	printf("loading text image\n");
+	sprite = pngDataLoad("png/text.png");
 	if (sprite == NULL) {
 		printf("could not set-up text sprite surface\n");
-		destructFramebuffer(&framebuffer);
-		destructSurface(&background);
-		destructSurface(&frontbuffer);
+		surfaceModDestruct(&mask);
+		framebufferDestruct(&framebuffer);
+		surfaceDestruct(&background);
+		surfaceDestruct(&frontbuffer);
 		epic_exit(1);
 	}
 	
@@ -119,31 +140,36 @@ int main(int argc, char **argv) {
 		matrixPP = mulMatrixMatrixPP(getMatrixTranslatePP(DISP_WIDTH/2,200),matrixPP);
 		
 		if (y <= sprite->height)
-			boundingBox = composePP(background,sprite,frontbuffer,matrixPP,255,BLEND_OVER,createBoundingBox(0,0,sprite->width-1,y));
+			composePP(background,sprite,frontbuffer,matrixPP,255,BLEND_OVER,boundingBoxCreate(0,0,sprite->width-1,y),mask);
 		else
-			boundingBox = composePP(background,sprite,frontbuffer,matrixPP,256 - (y-sprite->height)*4,BLEND_OVER,createBoundingBox(0,0,sprite->width-1,y));
+			composePP(background,sprite,frontbuffer,matrixPP,256 - (y-sprite->height)*4,BLEND_OVER,boundingBoxCreate(0,0,sprite->width-1,y),mask);
 		
-		copySurfaceToFramebuffer(frontbuffer,framebuffer);
-		redraw(framebuffer);
-		copySurfaceAreaToSurface(background,frontbuffer,boundingBox);
+		framebufferCopySurface(framebuffer,frontbuffer);
+		framebufferRedraw(framebuffer);
+		surfaceCopy(background,frontbuffer,mask);
+		surfaceModClear(mask);
 	}
 	
-	destructSurface(&sprite);
-	sprite = loadImage("png/sprite.png");
+	surfaceDestruct(&sprite);
+	printf("loading sprite image\n");
+	sprite = pngDataLoad("png/sprite.png");
 	if (sprite == NULL) {
 		printf("could not set-up sprite surface\n");
-		destructFramebuffer(&framebuffer);
-		destructSurface(&background);
-		destructSurface(&frontbuffer);
+		surfaceModDestruct(&mask);
+		framebufferDestruct(&framebuffer);
+		surfaceDestruct(&background);
+		surfaceDestruct(&frontbuffer);
 		epic_exit(1);
 	}
-	logo = loadImage("png/sprite-logo.png");
+	printf("loading logo image\n");
+	logo = pngDataLoad("png/sprite-logo.png");
 	if (logo == NULL) {
 		printf("could not set-up logo sprite surface\n");
-		destructFramebuffer(&framebuffer);
-		destructSurface(&background);
-		destructSurface(&frontbuffer);
-		destructSurface(&sprite);
+		surfaceModDestruct(&mask);
+		framebufferDestruct(&framebuffer);
+		surfaceDestruct(&background);
+		surfaceDestruct(&frontbuffer);
+		surfaceDestruct(&sprite);
 		epic_exit(1);
 	}
 	
@@ -157,6 +183,9 @@ int main(int argc, char **argv) {
 	dalpha = -1;
 	dscale = -8;
 	scale = 512;
+	
+	p.x = 80;
+	p.y = 40;
 	
 	printf("loop: rotating/moving sprites...\n");
 	for (uint16_t counter = 0; counter < 1000; counter++) {
@@ -172,21 +201,30 @@ int main(int argc, char **argv) {
 		matrix = mulMatrixMatrix(getMatrixRotate(angle),matrix);
 		matrix = mulMatrixMatrix(getMatrixTranslate(x+sprite->width/2,y+sprite->height/2),matrix);
 		
-		boundingBox = compose(background,sprite,frontbuffer,matrix,alpha,BLEND_OVER,getBoundingBoxSurface(sprite));
+		bbSprite = compose(background,sprite,frontbuffer,matrix,alpha,BLEND_OVER,boundingBoxGet(sprite),mask);
 		
 		matrix = getMatrixTranslate(-logo->width/2,-logo->height/2);
 		matrix = mulMatrixMatrix(getMatrixScale(scale,512),matrix);
 		matrix = mulMatrixMatrix(getMatrixTranslate(80,40),matrix);
-		boundingBoxLogo = compose(frontbuffer,logo,frontbuffer,matrix,255,BLEND_OVER,getBoundingBoxSurface(logo));
+		compose(frontbuffer,logo,frontbuffer,matrix,255,BLEND_OVER,boundingBoxGet(logo),mask);
 		
-		copySurfaceToFramebuffer(frontbuffer,framebuffer);
-		redraw(framebuffer);
-		copySurfaceAreaToSurface(background,frontbuffer,boundingBox);
-		copySurfaceAreaToSurface(background,frontbuffer,boundingBoxLogo);
+		surfaceDrawLine(frontbuffer,p,createPoint(80+surfaceCosine(angle)/32,40+surfaceSine(angle)/32),0xfff,0xff,BLEND_OVER,mask);
+		surfaceDrawArc(frontbuffer,p,32,angle,angle+120,0xffff,0xff,BLEND_OVER,mask);
+		surfaceDrawArc(frontbuffer,p,28,angle-60,angle+60,0xffff,0xff,BLEND_OVER,mask);
+		surfaceDrawArc(frontbuffer,p,24,angle-120,angle-60,0xffff,0xff,BLEND_OVER,mask);
+		
+// 		framebufferUpdateFromSurface(framebuffer,frontbuffer,mask);
+// 		framebufferRedraw(framebuffer);
+// 		framebufferUpdateFromSurface(framebuffer,background,mask);
+		
+		framebufferCopySurface(framebuffer,frontbuffer);
+		framebufferRedraw(framebuffer);
+		surfaceCopy(background,frontbuffer,mask);
+		surfaceModClear(mask);
 		
 		// check clipping
-		if ((boundingBox.max.x >= DISP_WIDTH-1 && dx > 0) || (boundingBox.min.x <= 0 && dx < 0)) dx = -dx;
-		if ((boundingBox.max.y >= DISP_HEIGHT-1 && dy > 0) || (boundingBox.min.y <= 0 && dy < 0)) dy = -dy;
+		if ((bbSprite.max.x >= DISP_WIDTH-1  && dx > 0) || (bbSprite.min.x <= 0 && dx < 0)) dx = -dx;
+		if ((bbSprite.max.y >= DISP_HEIGHT-1 && dy > 0) || (bbSprite.min.y <= 0 && dy < 0)) dy = -dy;
 		// check angle mod 360
 		angle = (360 + (angle % 360)) % 360;
 		// check alpha mod 255
@@ -196,10 +234,11 @@ int main(int argc, char **argv) {
 	}
 	
 	// clean up and exit
-	destructSurface(&background);
-	destructSurface(&sprite);
-	destructSurface(&logo);
-	destructFramebuffer(&framebuffer);
+	surfaceModDestruct(&mask);
+	surfaceDestruct(&background);
+	surfaceDestruct(&sprite);
+	surfaceDestruct(&logo);
+	framebufferDestruct(&framebuffer);
 	epic_exit(0);
 	return 0;
 }

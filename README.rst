@@ -62,6 +62,18 @@ Installation of the surfacedemo l0dable
 Changelog
 =========
 
+2020-02-06
+	changed SurfaceMod to an even simpler format because processing mask pixels took longer than simply redrawing the display :(
+	
+2020-02-05
+    changed SurfaceMod to a simpler format
+    reduced size of width/height to uint8_t (limiting images to 255*255, ok for card10's screen)
+
+2020-02-03
+    introduced SurfaceMod: a surface modification data structure for directed surface updates
+    introduced first drawing functions for primitives (point, line, circle, arc)
+    code refactoring: function naming now follows convention ObjectAction()
+    
 2020-01-20
     introduced boundingBoxSprite parameter; finally the crawling text works;
     preparing faSurface lib for release

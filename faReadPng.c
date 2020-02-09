@@ -1,7 +1,7 @@
 /**
  * @file
  * @author Frank Abelbeck <frank.abelbeck@googlemail.com>
- * @version 2019-12-14
+ * @version 2020-02-06
  * 
  * @section License
  * 
@@ -28,6 +28,7 @@
 #include <stdint.h> // uses: int8_t, uint8_t, int16_t, uint16_t, uint32_t
 #include <stdlib.h> // uses: malloc(), free()
 #include <stdbool.h> // uses: bool, true, false
+#include <stdio.h> // uses: SEEK_CUR
 #include "faReadPng.h"
 
 //------------------------------------------------------------------------------
@@ -35,7 +36,7 @@
 //------------------------------------------------------------------------------
 
 // PngData constructor: create and initialise a PngData structure
-PngData* constructPngData() {
+PngData* pngDataConstruct() {
 	PngData *pngdata = NULL;
 	pngdata = (PngData*)malloc(sizeof(PngData));
 	if (pngdata != NULL) {
@@ -63,7 +64,7 @@ PngData* constructPngData() {
 }
 
 // PngData destructor: clear any allocated memory, close the file and clear the structure
-void destructPngData(PngData **self) {
+void pngDataDestruct(PngData **self) {
 	if ((*self)->file >= 0)
 		if (epic_file_close((*self)->file) >= 0)
 			(*self)->file = -1;
@@ -82,7 +83,7 @@ void destructPngData(PngData **self) {
 // rgb565 = ((r>>3) << 11) | ((r>>2) << 5) | (r>>3)
 //------------------------------------------------------------------------------
 
-RGBA5658 convertPixelGrey1(PngData *self, uint16_t x) {
+RGBA5658 convertPixelGrey1(PngData *self, uint8_t x) {
 	RGBA5658 colour = {0,0};
 	uint16_t i = (x >> 3) + 1;
 	if (((self->scanlineCurrent[i] >> (x & 7)) & 1) == 1)
@@ -93,7 +94,7 @@ RGBA5658 convertPixelGrey1(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelGrey2(PngData *self, uint16_t x) {
+RGBA5658 convertPixelGrey2(PngData *self, uint8_t x) {
 	RGBA5658 colour = {0,0};
 	uint16_t i = (x >> 2) + 1;
 	uint8_t grey = 85 * ( (self->scanlineCurrent[i] >> (x & 3)) & 3 );
@@ -102,7 +103,7 @@ RGBA5658 convertPixelGrey2(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelGrey4(PngData *self, uint16_t x) {
+RGBA5658 convertPixelGrey4(PngData *self, uint8_t x) {
 	uint16_t i = (x >> 1) + 1;
 	uint8_t grey = 17 * ( (self->scanlineCurrent[i] >> (x & 1)) & 15 );
 	RGBA5658 colour;
@@ -111,7 +112,7 @@ RGBA5658 convertPixelGrey4(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelGrey8(PngData *self, uint16_t x) {
+RGBA5658 convertPixelGrey8(PngData *self, uint8_t x) {
 	uint16_t i = x + 1;
 	RGBA5658 colour;
 	colour.rgb565 = ((self->scanlineCurrent[i] >> 3) << 11) | ((self->scanlineCurrent[i] >> 2) << 5) | (self->scanlineCurrent[i] >> 3) ;
@@ -119,7 +120,7 @@ RGBA5658 convertPixelGrey8(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelGrey16(PngData *self, uint16_t x) {
+RGBA5658 convertPixelGrey16(PngData *self, uint8_t x) {
 	uint16_t i = x*2 + 1;
 	uint16_t grey = (self->scanlineCurrent[i] << 8) | self->scanlineCurrent[i+1];
 	RGBA5658 colour;
@@ -128,7 +129,7 @@ RGBA5658 convertPixelGrey16(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelIndexed1(PngData *self, uint16_t x) {
+RGBA5658 convertPixelIndexed1(PngData *self, uint8_t x) {
 	uint16_t i = (x >> 3) + 1;
 	uint8_t indexPalette = (self->scanlineCurrent[i] >> (x & 7)) & 1;
 	RGBA5658 colour = {0,0};
@@ -139,7 +140,7 @@ RGBA5658 convertPixelIndexed1(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelIndexed2(PngData *self, uint16_t x) {
+RGBA5658 convertPixelIndexed2(PngData *self, uint8_t x) {
 	uint16_t i = (x >> 2) + 1;
 	uint8_t indexPalette = (self->scanlineCurrent[i] >> (x & 3)) & 3;
 	RGBA5658 colour = {0,0};
@@ -150,7 +151,7 @@ RGBA5658 convertPixelIndexed2(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelIndexed4(PngData *self, uint16_t x) {
+RGBA5658 convertPixelIndexed4(PngData *self, uint8_t x) {
 	uint16_t i = (x >> 1) + 1;
 	uint8_t indexPalette = (self->scanlineCurrent[i] >> (x & 1)) & 15;
 	RGBA5658 colour = {0,0};
@@ -161,7 +162,7 @@ RGBA5658 convertPixelIndexed4(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelIndexed8(PngData *self, uint16_t x) {
+RGBA5658 convertPixelIndexed8(PngData *self, uint8_t x) {
 	uint16_t i = x + 1;
 	uint8_t indexPalette = self->scanlineCurrent[i];
 	RGBA5658 colour = {0,0};
@@ -172,7 +173,7 @@ RGBA5658 convertPixelIndexed8(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelRGB8(PngData *self, uint16_t x) {
+RGBA5658 convertPixelRGB8(PngData *self, uint8_t x) {
 	uint16_t i = x*3 + 1;
 	RGBA5658 colour;
 	colour.rgb565 = ((self->scanlineCurrent[i] >> 3) << 11) | ((self->scanlineCurrent[i+1] >> 2) << 5) | (self->scanlineCurrent[i+2] >> 3) ;
@@ -180,7 +181,7 @@ RGBA5658 convertPixelRGB8(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelRGB16(PngData *self, uint16_t x) {
+RGBA5658 convertPixelRGB16(PngData *self, uint8_t x) {
 	uint16_t i = x*6 + 1;
 	RGBA5658 colour;
 	colour.rgb565 = ((( (self->scanlineCurrent[i] << 8) | self->scanlineCurrent[i+1] ) >> 11) << 11) | \
@@ -190,7 +191,7 @@ RGBA5658 convertPixelRGB16(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelGreyA8(PngData *self, uint16_t x) {
+RGBA5658 convertPixelGreyA8(PngData *self, uint8_t x) {
 	uint16_t i = x*2 + 1;
 	RGBA5658 colour;
 	colour.rgb565 = ((self->scanlineCurrent[i] >> 3) << 11) | ((self->scanlineCurrent[i] >> 2) << 5) | (self->scanlineCurrent[i] >> 3) ;
@@ -198,7 +199,7 @@ RGBA5658 convertPixelGreyA8(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelGreyA16(PngData *self, uint16_t x) {
+RGBA5658 convertPixelGreyA16(PngData *self, uint8_t x) {
 	uint16_t i = x*4 + 1;
 	RGBA5658 colour;
 	uint16_t grey = (self->scanlineCurrent[i] << 8) | (self->scanlineCurrent[i+1]);
@@ -207,7 +208,7 @@ RGBA5658 convertPixelGreyA16(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelRGBA8(PngData *self, uint16_t x) {
+RGBA5658 convertPixelRGBA8(PngData *self, uint8_t x) {
 	uint16_t i = x*4 + 1;
 	RGBA5658 colour;
 	colour.rgb565 = ((self->scanlineCurrent[i] >> 3) << 11) | ((self->scanlineCurrent[i+1] >> 2) << 5) | (self->scanlineCurrent[i+2] >> 3) ;
@@ -215,7 +216,7 @@ RGBA5658 convertPixelRGBA8(PngData *self, uint16_t x) {
 	return colour;
 }
 
-RGBA5658 convertPixelRGBA16(PngData *self, uint16_t x) {
+RGBA5658 convertPixelRGBA16(PngData *self, uint8_t x) {
 	uint16_t i = x*8 + 1;
 	RGBA5658 colour;
 	colour.rgb565 = ((( (self->scanlineCurrent[i] << 8) | self->scanlineCurrent[i+1] ) >> 11) << 11) | \
@@ -934,11 +935,12 @@ uint16_t PaethPredictor(uint16_t a, uint16_t b, uint16_t c) {
 }
 
 // central PNG reading function
-int8_t readPNG(PngData *self, char *filename, Surface *image) {
+int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
+	if (image == NULL) return RET_MALLOC_IMAGE;
+	
 	// local vars
 	int8_t   retval;
 	uint8_t  magicBytes[8] = {0};
-	uint16_t x;
 	
 	// open file
 	self->file = epic_file_open(filename,"rb");
@@ -962,12 +964,16 @@ int8_t readPNG(PngData *self, char *filename, Surface *image) {
 	//  - second reading pass: 1 byte each for bit depth, colour type, compression method, filter method, interlace method
 	if (epic_file_read(self->file,magicBytes,8) != 8) return RET_READ;
 	self->lenChunk -= 8;
-	image->width = (uint16_t)BIGENDIAN32(&magicBytes[0]);
-	image->height = (uint16_t)BIGENDIAN32(&magicBytes[4]);
-	if (image->width == 0 || image->height == 0) return RET_DIMENSIONS;
-						
+	uint32_t tmp = (uint32_t)BIGENDIAN32(&magicBytes[0]);
+	if (tmp == 0 || tmp > 255) return RET_DIMENSIONS;
+	image->width = (uint8_t)tmp;
+	tmp = (uint32_t)BIGENDIAN32(&magicBytes[4]);
+	if (tmp == 0 || tmp > 255) return RET_DIMENSIONS;
+	image->height = (uint8_t)tmp;
+	
 	if (epic_file_read(self->file,magicBytes,5) != 5) return RET_READ;
 	self->lenChunk -= 5;
+	
 	// magicBytes[0] = bit depth (1,2,4,8,16)
 	// magicBytes[1] = colour type (0,2,3,4,6)
 	// magicBytes[2] = compression method, must be 0
@@ -980,6 +986,8 @@ int8_t readPNG(PngData *self, char *filename, Surface *image) {
 	uint8_t pass = magicBytes[4];
 	uint8_t bytesPerPixel;
 	uint8_t samplesPerPixel;
+	uint16_t k;
+	
 	switch (magicBytes[1]) {
 		// process colour type + bit depth combinations
 		case COLOURTYPE__GREY:
@@ -1046,12 +1054,12 @@ int8_t readPNG(PngData *self, char *filename, Surface *image) {
 			self->sizePalette = (uint8_t)((self->lenChunk / 3) - 1); // min 1, max 256, fitting into one byte (0..255)
 			self->palette = (uint16_t*)malloc(sizeof(uint16_t) * self->sizePalette + 2); // +2: account for normalised size
 			if (self->palette == NULL) return RET_MALLOC_PALETTE;
-			for (x=0; x <= self->sizePalette; x++) {
+			for (k=0; k <= self->sizePalette; k++) {
 				// read palette entries from chunk; the checks above ensure
 				// that the chunk holds enough bytes --> no lenChunk checking
 				if (epic_file_read(self->file,magicBytes,3) != 3) return RET_READ;
 				self->lenChunk -= 3;
-				self->palette[x] = RGB565(magicBytes[0],magicBytes[1],magicBytes[2]);
+				self->palette[k] = RGB565(magicBytes[0],magicBytes[1],magicBytes[2]);
 			}
 			break;
 		case COLOURTYPE__GREY_A:
@@ -1096,7 +1104,7 @@ int8_t readPNG(PngData *self, char *filename, Surface *image) {
 	
 	// no image data yet: allocate memory for the image, with 16-bit pixels and one 8-bit alpha channel
 	if (image->rgb565 != NULL) free(image->rgb565);
-	image->rgb565 = (uint16_t*)malloc(image->width * image->height * 2);
+	image->rgb565 = (uint16_t*)malloc((image->width * image->height) << 1);
 	if (image->rgb565 == NULL) return RET_MALLOC_IMAGE;
 	
 	if (image->alpha != NULL) free(image->alpha);
@@ -1106,24 +1114,36 @@ int8_t readPNG(PngData *self, char *filename, Surface *image) {
 	// allocate scanline buffers (largest dimension, kind of memory pool)
 	// w*spp*bpp --> bits --> bytes + 1 filter type byte
 	if (self->scanlineCurrent != NULL) free(self->scanlineCurrent);
+	self->scanlineCurrent = NULL;
 	if (self->scanlinePrevious != NULL) free(self->scanlinePrevious);
+	self->scanlinePrevious = NULL;
+	
 	self->scanlineCurrent = (uint8_t*)malloc(sizeScanline);
+	if (self->scanlineCurrent == NULL) return RET_MALLOC_SCANLINE;
+	
 	self->scanlinePrevious = (uint8_t*)malloc(sizeScanline);
-	if (self->scanlineCurrent == NULL || self->scanlinePrevious == NULL) return RET_MALLOC_SCANLINE;
+	if (self->scanlinePrevious == NULL) {
+		free(self->scanlineCurrent);
+		self->scanlineCurrent = NULL;
+		return RET_MALLOC_SCANLINE;
+	}
 	
 	// deal with interlacing (stored in magicBytes[4])
 	// interlace method = 0: no interlacing, thus pass=0, startNewPass sets current dimensions to image dimensions
 	// interlace method = 1: ADAM7 interlacing, thus pass=1, startNewPass sets current dimensions to first pass dimensions
 	// current dimensions (of subimage, if interlaced) determine processed scanline width
-	uint16_t x0 = 0;
-	uint16_t y = 0;
-	uint16_t dx = 1;
-	uint16_t dy = 1;
-	uint16_t widthCurrent,pixX,pixA,pixB,pixC;
-	uint32_t sizeScanlineCurrent;
-	uint32_t indexImage;
+	uint8_t x = 0;
+	uint8_t x0 = 0;
+	uint8_t y = 0;
+	uint8_t dx = 1;
+	uint8_t dy = 1;
+	uint8_t widthCurrent = image->width;
+	uint16_t pixX,pixA,pixB,pixC;
+	uint16_t sizeScanlineCurrent;
+	uint16_t indexImage;
 	uint8_t *tmpPtr;
 	RGBA5658 colour;
+	
 	do {
 		// for every pass...
 		// calculate new dimensions, clear scanlinePrevious
@@ -1133,55 +1153,63 @@ int8_t readPNG(PngData *self, char *filename, Surface *image) {
 				y  = 0;
 				dx = 1;
 				dy = 1;
+				widthCurrent = image->width;
 				break;
 			case 1:
 				x0 = 0;
 				y  = 0;
 				dx = 8;
 				dy = 8;
+				widthCurrent = ((image->width - 1) >> 3) + 1;
 				break;
 			case 2:
 				x0 = 4;
 				y  = 0;
 				dx = 8;
 				dy = 8;
+				widthCurrent = ((image->width - 5) >> 3) + 1;
 				break;
 			case 3:
 				x0 = 0;
 				y  = 4;
 				dx = 4;
 				dy = 8;
+				widthCurrent = ((image->width - 1) >> 2) + 1;
 				break;
 			case 4:
 				x0 = 2;
 				y  = 0;
 				dx = 4;
 				dy = 4;
+				widthCurrent = ((image->width - 3) >> 2) + 1;
 				break;
 			case 5:
 				x0 = 0;
 				y  = 2;
 				dx = 2;
 				dy = 4;
+				widthCurrent = ((image->width - 1) >> 1) + 1;
 				break;
 			case 6:
 				x0 = 1;
 				y  = 0;
 				dx = 2;
 				dy = 2;
+				widthCurrent = ((image->width - 2) >> 1) + 1;
 				break;
 			case 7:
 				x0 = 0;
 				y  = 1;
 				dx = 1;
 				dy = 2;
+				widthCurrent = image->width;
 				break;
 		}
-		widthCurrent = (image->width - 1 - x0) / dx +1;
+// 		widthCurrent = (image->width - 1 - x0) / dx +1;
 		
 		// calculate scanline buffer length for given dimensions and clear previous scanline
 		sizeScanlineCurrent = SCANLINEBYTES(widthCurrent,samplesPerPixel,bitDepth);
-		for (x = 0; x < sizeScanlineCurrent; x++) self->scanlinePrevious[x] = 0;
+		for (k = 0; k < sizeScanlineCurrent; k++) self->scanlinePrevious[x] = 0;
 		
 		// (y was already initialised)
 		for (; y < image->height; y += dy) {
@@ -1193,39 +1221,39 @@ int8_t readPNG(PngData *self, char *filename, Surface *image) {
 			// 2) apply filter type (byte0) to all bytes in scanlineCurrent
 			switch (self->scanlineCurrent[0]) {
 				case FILTER_SUB:
-					for (x = 1; x < sizeScanlineCurrent; x++) {
-						pixX = (uint16_t)self->scanlineCurrent[x];
-						pixA = (x - bytesPerPixel > 0)? (uint16_t)self->scanlineCurrent[x - bytesPerPixel] : 0;
-						self->scanlineCurrent[x] = (uint8_t)(pixX + pixA);
+					for (k = 1; k < sizeScanlineCurrent; k++) {
+						pixX = (uint16_t)self->scanlineCurrent[k];
+						pixA = (k - bytesPerPixel > 0)? (uint16_t)self->scanlineCurrent[k - bytesPerPixel] : 0;
+						self->scanlineCurrent[k] = (uint8_t)(pixX + pixA);
 					}
 					break;
 				case FILTER_UP:
-					for (x = 1; x < sizeScanlineCurrent; x++) {
-						pixX = (uint16_t)self->scanlineCurrent[x];
-						pixB = (uint16_t)self->scanlinePrevious[x];
-						self->scanlineCurrent[x] = (uint8_t)((pixX + pixB) & 0xff);
+					for (k = 1; k < sizeScanlineCurrent; k++) {
+						pixX = (uint16_t)self->scanlineCurrent[k];
+						pixB = (uint16_t)self->scanlinePrevious[k];
+						self->scanlineCurrent[k] = (uint8_t)((pixX + pixB) & 0xff);
 					}
 					break;
 				case FILTER_AVG:
-					for (x = 1; x < sizeScanlineCurrent; x++){
-						pixX = (uint16_t)self->scanlineCurrent[x];
-						pixA = (x - bytesPerPixel > 0)? (uint16_t)self->scanlineCurrent[x - bytesPerPixel] : 0;
-						pixB = (uint16_t)self->scanlinePrevious[x];
-						self->scanlineCurrent[x] = (uint8_t)((pixX + ((pixA+pixB)>>1)) & 0xff);
+					for (k = 1; k < sizeScanlineCurrent; k++){
+						pixX = (uint16_t)self->scanlineCurrent[k];
+						pixA = (k - bytesPerPixel > 0)? (uint16_t)self->scanlineCurrent[k - bytesPerPixel] : 0;
+						pixB = (uint16_t)self->scanlinePrevious[k];
+						self->scanlineCurrent[k] = (uint8_t)((pixX + ((pixA+pixB)>>1)) & 0xff);
 					}
 					break;
 				case FILTER_PAETH:
-					for (x = 1; x < sizeScanlineCurrent; x++) {
-						pixX = (uint16_t)self->scanlineCurrent[x];
-						if (x - bytesPerPixel > 0) {
-							pixA = (uint16_t)self->scanlineCurrent[x - bytesPerPixel];
-							pixC = (uint16_t)self->scanlinePrevious[x - bytesPerPixel];
+					for (k = 1; k < sizeScanlineCurrent; k++) {
+						pixX = (uint16_t)self->scanlineCurrent[k];
+						if (k - bytesPerPixel > 0) {
+							pixA = (uint16_t)self->scanlineCurrent[k - bytesPerPixel];
+							pixC = (uint16_t)self->scanlinePrevious[k - bytesPerPixel];
 						} else {
 							pixA = 0;
 							pixC = 0;
 						}
-						pixB = (uint16_t)self->scanlinePrevious[x];
-						self->scanlineCurrent[x] = (uint8_t)((pixX + PaethPredictor(pixA,pixB,pixC)) & 0xff);
+						pixB = (uint16_t)self->scanlinePrevious[k];
+						self->scanlineCurrent[k] = (uint8_t)((pixX + PaethPredictor(pixA,pixB,pixC)) & 0xff);
 					}
 					break;
 				case FILTER_NONE:
@@ -1257,19 +1285,19 @@ int8_t readPNG(PngData *self, char *filename, Surface *image) {
 // Surface construction via image loading
 //------------------------------------------------------------------------------
 
-Surface *loadImage(char *filename) {
-	Surface *image = constructSurface();
+Surface *pngDataLoad(char *filename) {
+	Surface *image = surfaceConstruct();
 	if (image == NULL) return NULL;
 	
-	PngData *data = constructPngData();
+	PngData *data = pngDataConstruct();
 	if (data == NULL) return NULL;
 	
-	int retval = readPNG(data,filename,image);
-	destructPngData(&data);
+	int retval = pngDataRead(data,filename,image);
+	pngDataDestruct(&data);
 	if (retval == RET_OK) {
 		return image;
 	} else {
-		destructSurface(&image);
+		surfaceDestruct(&image);
 		return NULL;
 	}
 }

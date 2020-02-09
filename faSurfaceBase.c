@@ -1,7 +1,7 @@
 /**
  * @file
  * @author Frank Abelbeck <frank.abelbeck@googlemail.com>
- * @version 2020-01-20
+ * @version 2020-02-06
  * 
  * @section License
  * 
@@ -26,6 +26,7 @@
 #include <stdlib.h> // uses: malloc(), free()
 #include <stdint.h> // uses: int8_t, uint8_t, int16_t, uint16_t, uint32_t
 #include <stdio.h>  // uses printf() for printInt() function
+#include <stdbool.h> // uses: true, false, bool
 
 #include "faSurfaceBase.h"
 
@@ -34,7 +35,7 @@
 //------------------------------------------------------------------------------
 
 // Surface constructor: create and initialise an Surface structure
-Surface *constructSurface() {
+Surface *surfaceConstruct() {
 	Surface *surface = NULL;
 	surface = (Surface*)malloc(sizeof(Surface));
 	if (surface != NULL) {
@@ -47,7 +48,7 @@ Surface *constructSurface() {
 }
 
 // Surface destructor: clear any allocated memory and deallocate structure
-void destructSurface(Surface **self) {
+void surfaceDestruct(Surface **self) {
 	free((*self)->rgb565);
 	free((*self)->alpha);
 	free(*self);
@@ -55,20 +56,20 @@ void destructSurface(Surface **self) {
 }
 
 // Surface initialiser: create structure and allocate surface memory
-Surface *setupSurface(uint16_t width, uint16_t height) {
-	Surface *surface = constructSurface();
+Surface *surfaceSetup(uint8_t width, uint8_t height) {
+	Surface *surface = surfaceConstruct();
 	if (surface == NULL) return NULL;
 	surface->width = width;
 	surface->height = height;
 	if (width > 0 && height > 0) {
 		surface->rgb565 = (uint16_t*)malloc(width*height*2);
 		if (surface->rgb565 == NULL) {
-			destructSurface(&surface);
+			surfaceDestruct(&surface);
 			return NULL;
 		}
 		surface->alpha = (uint8_t*)malloc(width*height);
 		if (surface->alpha == NULL) {
-			destructSurface(&surface);
+			surfaceDestruct(&surface);
 			return NULL;
 		}
 	}
@@ -76,53 +77,64 @@ Surface *setupSurface(uint16_t width, uint16_t height) {
 }
 
 // Surface initialiser: create structure and allocate surface memory
-Surface *cloneSurface(Surface *surface) {
+Surface *surfaceClone(Surface *surface) {
 	if (surface == NULL) return NULL;
-	Surface *surfaceClone = setupSurface(surface->width,surface->height);
+	Surface *surfaceClone = surfaceSetup(surface->width,surface->height);
 	if (surfaceClone == NULL) return NULL;
-	for (uint32_t i = 0; i < surface->width*surface->height; i++) {
+	uint16_t i = surface->width*surface->height;
+	do {
+		i--;
 		surfaceClone->rgb565[i] = surface->rgb565[i];
 		surfaceClone->alpha[i] = surface->alpha[i];
-	}
+	} while (i > 0);
 	return surfaceClone;
 }
 
-void clearSurface(Surface *surface, uint16_t colour, uint8_t alpha) {
-	if (surface != NULL && surface->rgb565 != NULL && surface->alpha != NULL) {
-		for (uint32_t i = 0; i < surface->width*surface->height; i++) {
-			surface->rgb565[i] = colour;
-			surface->alpha[i] = alpha;
-		}
-	}
+void surfaceClear(Surface *surface, uint16_t colour, uint8_t alpha) {
+	if (surface == NULL || surface->rgb565 == NULL || surface->alpha == NULL) return;
+	uint16_t i = surface->width*surface->height;
+	do {
+		i--;
+		surface->rgb565[i] = colour;
+		surface->alpha[i] = alpha;
+	} while (i > 0);
 }
 
-void copySurfaceAreaToSurface(Surface *source, Surface *destination, BoundingBox boundingBox) {
-	// sanity check: surfaces should exist and bounding box has to be clipped to a valid area
-	if (source == NULL || destination == NULL || source->width != destination->width || source->height != destination->height) return;
-#ifdef FASURFACE_FULL
-	boundingBox.min = divPerspective(boundingBox.min);
-	boundingBox.max = divPerspective(boundingBox.max);
-#endif
-	if (boundingBox.min.x < 0) boundingBox.min.x = 0;
-	if (boundingBox.min.y < 0) boundingBox.min.y = 0;
-	if (boundingBox.max.x >= source->width) boundingBox.max.x = source->width - 1;
-	if (boundingBox.max.y >= source->height) boundingBox.max.y = source->height - 1;
+void surfaceCopy(Surface *source, Surface *destination, SurfaceMod *mask) {
+	// sanity check: surfaces should exist and dimensions should match
+	if (source == NULL || destination == NULL || mask == NULL || source->width != destination->width || source->height != destination->height || source->height > mask->height) return;
 	
-	// iterate over bounding box and adjust surface indices accordingly.
-	uint16_t x;
-	uint32_t i = boundingBox.min.y * source->width + boundingBox.min.x;
-	uint16_t di = source->width - 1 - boundingBox.max.x + boundingBox.min.x;
-	for (uint16_t y = boundingBox.min.y; y <= boundingBox.max.y; y++) {
-		for (x = boundingBox.min.x; x <= boundingBox.max.x; x++) {
-			destination->rgb565[i] = source->rgb565[i];
-			destination->alpha[i] = source->alpha[i];
+	uint32_t bitmask;
+	uint8_t x;
+	uint16_t i = 0;
+	
+	for (uint8_t y = 0; y < source->height; y++) {
+		bitmask = mask->tile[y >> 3];
+		if (bitmask == 0) {
+			// empty bitmask: nothing to do for this and the next seven rows
+			i += source->width << 3;
+			y += 7;
+			continue;
+		}
+		for (x = 0; x < source->width; x++) {
+			if ((1 << (x >> 3)) & bitmask) {
+				destination->rgb565[i] = source->rgb565[i];
+				destination->alpha[i]  = source->alpha[i];
+			}
 			i++;
 		}
-		i += di;
 	}
 }
 
-BoundingBox createBoundingBox(int32_t xMin, int32_t yMin, int32_t xMax, int32_t yMax) {
+Point createPoint(int32_t x, int32_t y) {
+	Point p;
+	p.x = x;
+	p.y = y;
+	return p;
+}
+
+
+BoundingBox boundingBoxCreate(int32_t xMin, int32_t yMin, int32_t xMax, int32_t yMax) {
 	BoundingBox bb;
 	bb.min.x = xMin;
 	bb.min.y = yMin;
@@ -131,7 +143,7 @@ BoundingBox createBoundingBox(int32_t xMin, int32_t yMin, int32_t xMax, int32_t 
 	return bb;
 }
 
-BoundingBox getBoundingBoxSurface(Surface *surface) {
+BoundingBox boundingBoxGet(Surface *surface) {
 	BoundingBox bb;
 	bb.min.x = 0;
 	bb.min.y = 0;
@@ -140,28 +152,513 @@ BoundingBox getBoundingBoxSurface(Surface *surface) {
 	return bb;
 }
 
+SurfaceMod *surfaceModConstruct(uint8_t height) {
+	SurfaceMod *mask = (SurfaceMod*)malloc(sizeof(SurfaceMod));
+	mask->height = 0;
+	mask->tile = NULL;
+	if (height > 0) {
+		mask->tile = (uint32_t*)malloc((height >> 1) + 4); // size = 4*(height/8 + 1);
+		if (mask->tile != NULL) {
+			mask->height = height;
+			surfaceModClear(mask);
+		} else {
+			surfaceModDestruct(&mask);
+		}
+	}
+	return mask;
+}
+
+void surfaceModDestruct(SurfaceMod **mask) {
+	if (mask == NULL) return;
+	free((*mask)->tile);
+	free((*mask));
+	*mask = NULL;
+}
+
+/* clear mask by setting used to zero */
+void surfaceModClear(SurfaceMod *mask) {
+	if (mask == NULL) return;
+	uint8_t iMax = mask->height >> 3;
+	for (uint8_t i = 0; i < iMax; i++) mask->tile[i] = 0;
+}
+
+void surfaceModSetSeq(SurfaceMod *mask, uint8_t x, uint8_t y, uint8_t len) {
+	if (mask == NULL || y >= mask->height || len == 0) return;
+	// new bitmask = all bits below start bit  XOR  all bits up to and including stop bit
+	mask->tile[y >> 3] |= ( (1 << (x >> 3))-1 )  ^  ( (1 << (((x+len-1) >> 3)+1))-1 );
+}
+
+void surfaceModSetRow(SurfaceMod *mask, uint8_t y, uint32_t bitmask) {
+	if (mask == NULL || y >= mask->height) return;
+	mask->tile[y >> 3] |= bitmask;
+}
+
+void surfaceModSetPixel(SurfaceMod *mask, uint8_t x, uint8_t y) {
+	if (mask == NULL || y >= mask->height) return;
+	mask->tile[y >> 3] |= 1 << (x >> 3);
+}
+
 //------------------------------------------------------------------------------
 // drawing routines for geometric primitives
 //------------------------------------------------------------------------------
 
-void drawPoint(Surface *surface, int16_t x, int16_t y, uint16_t colour, uint8_t alpha) {
-	// TODO
+BoundingBox surfaceDrawPoint(Surface *surface, Point p, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask) {
+	BoundingBox bb = boundingBoxCreate(0,0,0,0);
+	if (surface == NULL || mask == NULL) return bb;
+	
+	if (p.x >= 0 && p.x < surface->width && p.y >= 0 && p.y < surface->height) {
+		// pixel visible, draw it
+		uint32_t i = p.y * surface->width + p.x;
+		if (surfaceBlend(
+			colour,alpha,
+			surface->rgb565[i],surface->alpha[i],
+			&surface->rgb565[i],&surface->alpha[i],
+			mode)) {
+			// blending changed the surface pixel; add single pixel entry
+			surfaceModSetPixel(mask,p.x,p.y);
+		}
+		bb.min = p;
+		bb.max = p;
+	}
+	return bb;
 }
 
-void drawLine(Surface *surface, int16_t x0, int16_t y0, int16_t x1, int16_t y1, uint16_t colour, uint8_t alpha) {
-	// TODO
+
+BoundingBox surfaceDrawLine(Surface *surface, Point p0, Point p1, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask)  {
+	BoundingBox bb = boundingBoxCreate(0,0,0,0);
+	// simple implementation of the Bresenham line algorithm; first check validity of surface
+	if (surface == NULL || mask == NULL) return bb;
+	
+	int16_t xDiff,yDiff;
+	int8_t  xStep,yStep;
+	
+	// calculate the x direction of the line and stepping parameters
+	if (p1.x > p0.x) {
+		xDiff = p1.x - p0.x;
+		xStep = 1;
+		bb.min.x = p0.x;
+		bb.max.x = p1.x;
+	} else {
+		xDiff = p0.x - p1.x;
+		xStep = -1;
+		bb.min.x = p1.x;
+		bb.max.x = p0.x;
+	}
+	
+	// since p1.y is always >= p0.y (see above), there is only one stepping calculation case
+	if (p1.y > p0.y) {
+		yDiff = p0.y - p1.y;
+		yStep = 1;
+		bb.min.y = p0.y;
+		bb.max.y = p1.y;
+	} else {
+		yDiff = p1.y - p0.y;
+		yStep = -1;
+		bb.min.y = p1.y;
+		bb.max.y = p0.y;
+	}
+	
+	// setup error variables
+	int16_t error  = xDiff+yDiff;
+	int16_t error2 = 0;
+	int16_t i;
+	uint32_t bitmask = 0;
+	
+	// use x0,y0 as running coordinate pair, calculate new coordinates as long as p1.x,p1.y is not reached
+	while (1) {
+		if (p0.x >= 0 && p0.x < surface->width && p0.y >= 0 && p0.y < surface->height) {
+			// pixel visible: calculate new index and record in mask if blending modified the surface
+			i = p0.y * surface->width + p0.x;	
+			if (surfaceBlend(
+				colour,alpha,
+				surface->rgb565[i],surface->alpha[i],
+				&surface->rgb565[i],&surface->alpha[i],
+				mode)
+			) bitmask |= 1 << (p0.x >> 3);
+		}
+		
+		if (p0.x == p1.x && p0.y == p1.y) {
+			surfaceModSetRow(mask,p0.y,bitmask); // prior to exit, set last bitmask
+			break; // end is reached, let loop terminate
+		}
+		// update error term
+		error2 = error + error;
+		if (error2 > yDiff) {
+			// error inside yDiff bounds: step in x direction, update error term
+			error += yDiff;
+			p0.x += xStep;
+		}
+		if (error2 < xDiff) {
+			surfaceModSetRow(mask,p0.y,bitmask);
+			bitmask = 0;
+			// error inside yDiff bounds: step in x direction, update error term
+			error += xDiff;
+			p0.y += yStep;
+		}
+	}
+	
+	return bb;
 }
 
-void drawCircle(Surface *surface, int16_t x, int16_t y, uint16_t radius, uint16_t colour, uint8_t alpha) {
-	// TODO
+
+BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask) {
+	BoundingBox bb = boundingBoxCreate(0,0,0,0);
+	// Bresenham-like algorithm, running from (x,y+radius) along the circle until (x==y)
+	// this is the octant 1 in the following ascii art (screen coordinates),
+	// running counter-clockwise from 90° to 45°
+	//
+	//   .  |  .
+	//    .5|6.
+	//   4 .|. 7
+	//  ----+---->
+	//   3 .|. 0
+	//    .2|1.
+	//   .  |  .
+	//      V
+	// every other octant can be reached using the circle's symmetry
+	if (surface == NULL || radius == 0) return bb;
+	
+	int16_t error = 1 - radius;
+	int16_t ddE_x = 0;
+	int16_t ddE_y = -2 * radius;
+	uint32_t i;
+	Point p, pTemp;
+	
+	bb.min.x = pm.x - radius;
+	bb.max.x = pm.x + radius;
+	bb.min.y = pm.y - radius;
+	bb.max.y = pm.y + radius;
+	
+	if (bb.min.x < 0) bb.min.x = 0;
+	if (bb.min.y < 0) bb.min.y = 0;
+	if (bb.max.x >= surface->width) bb.max.x = surface->width - 1;
+	if (bb.max.y >= surface->height) bb.max.y = surface->height - 1;
+	
+	p.x = 0;
+	p.y = radius;
+	do {
+		pTemp.y = pm.y + p.y;
+		if (pTemp.y >= 0 && pTemp.y < surface->height) {
+			pTemp.x = pm.x + p.x;
+			if (pTemp.x >= 0 && pTemp.x < surface->width) {
+				// set pixel in octant 1 (x+xMod,y+yMod)
+				// drawing direction: from 90° to 45°
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+			pTemp.x = pm.x - p.x;
+			if (pTemp.x >= 0 && pTemp.x < surface->width) {
+				// set pixel in octant 2 (x-xMod,y+yMod)
+				// drawing direction: from 90° to 135°
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+		}
+		
+		pTemp.y = pm.y - p.y;
+		if (pTemp.y >= 0 && pTemp.y < surface->height) {
+			pTemp.x = pm.x + p.x;
+			if (pTemp.y >= 0 && pTemp.y < surface->height) {
+				// set pixel in octant 6 (x+xMod,y-yMod)
+				// drawing direction: from 270° to 315°
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+			pTemp.x = pm.x - p.x;
+			if (pTemp.y >= 0 && pTemp.y < surface->height) {
+				// set pixel in octant 5 (x-xMod,y-yMod)
+				// drawing direction: from 270° to 225°
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+		}
+		
+		pTemp.y = pm.y + p.x;
+		if (pTemp.y >= 0 && pTemp.y < surface->height) {
+			pTemp.x = pm.x + p.y;
+			if (pTemp.y >= 0 && pTemp.y < surface->height) {
+				// set pixel in octant 0 (x+yMod,y+xMod)
+				// drawing direction: from 0° to 45°
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+			pTemp.x = pm.x - p.y;
+			if (pTemp.y >= 0 && pTemp.y < surface->height) {
+				// set pixel in octant 3 (x-yMod,y+xMod)
+				// drawing direction: from 180° to 135°
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+		}
+		
+		pTemp.y = pm.y - p.x;
+		if (pTemp.y >= 0 && pTemp.y < surface->height) {
+			pTemp.x = pm.x + p.y;
+			if (pTemp.y >= 0 && pTemp.y < surface->height) {
+				// set pixel in octant 7 (x+yMod,y-xMod)
+				// drawing direction: from 360° to 315°
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+			pTemp.x = pm.x - p.y;
+			if (pTemp.y >= 0 && pTemp.y < surface->height) {
+				// set pixel in octant 4 (x-yMod,y-xMod)
+				// drawing direction: from 180° to 225°
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+		}
+		
+		// update error term to check which axis needs stepping
+		if (error >= 0) {
+			// error term positive:
+			// also reduce running y var (going von radius to 0) and updat error term
+			p.y--;
+			ddE_y += 2;
+			error += ddE_y;
+		}
+		// increase x var and update error term
+		p.x++;
+		ddE_x += 2;
+		error += ddE_x + 1;
+	} while (p.x < p.y);
+	
+	return bb;
 }
 
-void drawTriangle(Surface *surface, int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint16_t colour, uint8_t alpha) {
-	// TODO
+
+BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t angleStart, int16_t angleStop, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask) {
+	BoundingBox bb = boundingBoxCreate(0,0,0,0);
+	// Bresenham-like algorithm, running from (x,y+radius) along the circle until (x==y)
+	// this is the octant 1 in the following ascii art (screen coordinates),
+	// running counter-clockwise from 90° to 45°
+	//
+	//   .  |  .
+	//    .5|6.
+	//   4 .|. 7
+	//  ----+---->
+	//   3 .|. 0
+	//    .2|1.
+	//   .  |  .
+	//      V
+	// every other octant can be reached using the circle's symmetry
+	if (surface == NULL || radius == 0) return bb;
+	
+	int16_t error = 1 - radius;
+	int16_t ddE_x = 0;
+	int16_t ddE_y = -2 * radius;
+	uint32_t i;
+	int16_t xStart,xStop,yStart,yStop;
+	Point p, pTemp;
+	
+	p.x = 0;
+	p.y = radius;
+	
+	// Since this function should draw partial circles, we have to pre-calculate
+	// the start and stop coordinates
+	// limit angles to 0..359
+	angleStart = (360 + (angleStart % 360)) % 360;
+	angleStop = (360 + (angleStop % 360)) % 360;
+	
+	xStart = radius * surfaceCosine(angleStart) / 1024;
+	yStart = radius * surfaceSine(angleStart) / 1024;
+	xStop  = radius * surfaceCosine(angleStop)  / 1024;
+	yStop  = radius * surfaceSine(angleStop)  / 1024;
+	
+	
+	// --- TODO: modify circle bounding box to arc ---
+	
+	bb.min.x = pm.x - radius;
+	bb.max.x = pm.x + radius;
+	bb.min.y = pm.y - radius;
+	bb.max.y = pm.y + radius;
+	
+	if (bb.min.x < 0) bb.min.x = 0;
+	if (bb.min.y < 0) bb.min.y = 0;
+	if (bb.max.x >= surface->width) bb.max.x = surface->width - 1;
+	if (bb.max.y >= surface->height) bb.max.y = surface->height - 1;
+	
+	// --- TODO: modify circle bounding box to arc ---
+	
+	
+	// setup a bitmask for all octants and -- depending on angles -- set bits for octants that need processing
+	uint8_t octantStart = angleStart/45;
+	uint8_t octantStop = angleStop/45;
+	uint8_t octants = 0;
+	if (octantStop >= octantStart) {
+		octants = ((1 << (octantStop-octantStart+1))-1) << octantStart;
+	} else {
+		octants = ~(((1 << (octantStart-octantStop-1))-1) << (octantStop+1));
+	}
+	
+	do {
+		// paint pixel for all octants (use symmetry)
+		
+		pTemp.x = pm.x + p.x;
+		if (pTemp.x >= 0 && pTemp.x < surface->width) {
+			pTemp.y = pm.y + p.y;
+			// set pixel in octant 1 (x+xMod,y+yMod)
+			// drawing direction: from 90° to 45°
+			if (octants & 2 && pTemp.y >= 0 && pTemp.y < surface->height && \
+				(octantStart != 1 || p.x <= xStart) && (octantStop != 1 || p.x >= xStop) ) {
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+			pTemp.y = pm.y - p.y;
+			// set pixel in octant 6 (x+xMod,y-yMod)
+			// drawing direction: from 270° to 315°
+			if (octants & 64 && pTemp.y >= 0 && pTemp.y < surface->height && \
+				(octantStart != 6 || p.x >= xStart) && (octantStop != 6 || p.x <= xStop) ) {
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+		}
+		
+		pTemp.x = pm.x - p.x;
+		if (pTemp.x >= 0 && pTemp.x < surface->width) {
+			pTemp.y = pm.y + p.y;
+			// set pixel in octant 2 (x-xMod,y+yMod)
+			// drawing direction: from 90° to 135°
+			if (octants & 4 && pTemp.y >= 0 && pTemp.y < surface->height && \
+				(octantStart != 2 || -p.x <= xStart) && (octantStop != 2 || -p.x >= xStop) ) {
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+			pTemp.y = pm.y - p.y;
+			// set pixel in octant 5 (x-xMod,y-yMod)
+			// drawing direction: from 270° to 225°
+			if (octants & 32 && pTemp.y >= 0 && pTemp.y < surface->height && \
+				(octantStart != 5 || -p.x >= xStart) && (octantStop != 5 || -p.x <= xStop) ) {
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+		}
+		
+		pTemp.x = pm.x + p.y;
+		if (pTemp.x >= 0 && pTemp.x < surface->width) {
+			pTemp.y = pm.y + p.x;
+			// set pixel in octant 0 (x+yMod,y+xMod)
+			// drawing direction: from 0° to 45°
+			if (octants & 1 && pTemp.y >= 0 && pTemp.y < surface->height && \
+				(octantStart != 0 || p.x >= yStart) && (octantStop != 0 || p.x <= yStop) ) {
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+			pTemp.y = pm.y - p.x;
+			// set pixel in octant 7 (x+yMod,y-xMod)
+			// drawing direction: from 360° to 315°
+			if (octants & 128 && pTemp.y >= 0 && pTemp.y < surface->height && \
+				(octantStart != 7 || -p.x >= yStart) && (octantStop != 7 || -p.x <= yStop) ) {
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+		}
+		pTemp.x = pm.x - p.y;
+		if (pTemp.x >= 0 && pTemp.x < surface->width) {
+			pTemp.y = pm.y + p.x;
+			// set pixel in octant 3 (x-yMod,y+xMod)
+			// drawing direction: from 180° to 135°
+			if (octants & 8 && pTemp.y >= 0 && pTemp.y < surface->height && \
+				(octantStart != 3 || p.x <= yStart) && (octantStop != 3 || p.x >= yStop) ) {
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+			pTemp.y = pm.y - p.x;
+			// set pixel in octant 4 (x-yMod,y-xMod)
+			// drawing direction: from 180° to 225°
+			if (octants & 16 && pTemp.y >= 0 && pTemp.y < surface->height && \
+				(octantStart != 4 || -p.x <= yStart) && (octantStop != 4 || -p.x >= yStop) ) {
+				i = pTemp.y * surface->width + pTemp.x;
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) surfaceModSetPixel(mask,pTemp.x,pTemp.y);
+			}
+		}
+		
+		// update error term to check which axis needs stepping
+		if (error >= 0) {
+			p.y--;
+			ddE_y += 2;
+			error += ddE_y;
+		}
+		p.x++;
+		ddE_x += 2;
+		error += ddE_x + 1;
+	} while (p.x < p.y);
+	
+	return bb;
 }
 
-void drawRectangle(Surface *surface, int16_t x, int16_t y, int16_t width, int16_t height, uint16_t colour, uint8_t alpha) {
-	// TODO
+BoundingBox surfaceDrawTriangle(Surface *surface, Point p0, Point p1, Point p2, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask) {
+	BoundingBox bb = boundingBoxCreate(0,0,0,0);
+	return bb;
+}
+
+BoundingBox surfaceDrawRectangle(Surface *surface, Point p0, Point p1, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask) {
+	BoundingBox bb = boundingBoxCreate(0,0,0,0);
+	return bb;
 }
 
 //------------------------------------------------------------------------------
@@ -169,7 +666,7 @@ void drawRectangle(Surface *surface, int16_t x, int16_t y, int16_t width, int16_
 //------------------------------------------------------------------------------
 
 // return tan(x) for x in -45..+45, mapping [-1.0..+1.0] to -1024..+1024
-int16_t faTan45(int16_t x) {
+int16_t surfaceTangent45(int16_t x) {
 	// limit to -44..+44
 	if (x <= -45) return -1024;
 // 	>>> for x in range(-44,45): print("case {}: return {};".format(x,round(math.tan(math.pi*x/180)*1024)))
@@ -268,7 +765,7 @@ int16_t faTan45(int16_t x) {
 }
 
 // return sin(x) for x in 0..90, mapping [0..+1.0] to 0..+1024
-int16_t faSin90(int16_t x) {
+int16_t surfaceSine90(int16_t x) {
 	if (x <= 0) return 0;
 // 	>>> for x in range(0,91): print("case {}: return {};".format(x,round(math.sin(math.pi*x/180)*1024)))
 	switch (x) {
@@ -366,30 +863,29 @@ int16_t faSin90(int16_t x) {
 }
 
 // return sin(x) for x in 0..360, mapping [-1.0..+1.0] to -1024..+1024
-int16_t faSin(int16_t x) {
-	if (x < 0) {
-		return 0;
-	} else if (x < 90) {
-		// 1st sector: use faSin90
-		return faSin90(x);
+int16_t surfaceSine(int16_t x) {
+	x = ((x % 360) + 360) % 360;
+	if (x < 90) {
+		// 1st sector: use surfaceSine90
+		return surfaceSine90(x);
 	} else if (x < 180) {
-		// 2nd sector: use faSin90, mirrored about y axis
-		return faSin90(180-x);
+		// 2nd sector: use surfaceSine90, mirrored about y axis
+		return surfaceSine90(180-x);
 	} else if (x < 270) {
-		// 3rd sector: use faSin90, mirrored about x axis
-		return -faSin90(x-180);
+		// 3rd sector: use surfaceSine90, mirrored about x axis
+		return -surfaceSine90(x-180);
 	} else if (x < 360) {
-		// 4th sector: use faSin90, mirrored about x and y axis
-		return -faSin90(360-x);
+		// 4th sector: use surfaceSine90, mirrored about x and y axis
+		return -surfaceSine90(360-x);
 	} else {
 		return 0;
 	}
 }
 
 // return cos(x) for x in 0..360, mapping [-1.0..+1.0] to -1024..+1024
-int16_t faCos(int16_t x) {
+int16_t surfaceCosine(int16_t x) {
 	// cos = sin, phase-shifted by 90 degrees
-	return faSin((x + 90) % 360);
+	return surfaceSine(x + 90);
 }
 
 //------------------------------------------------------------------------------
@@ -398,9 +894,10 @@ int16_t faCos(int16_t x) {
 
 // Image composition function for alpha blending a colour component of a pixel
 // of surface A with a colour component of a pixel of surface B.
-void blend(uint16_t colourA, uint8_t alphaA, uint16_t colourB, uint8_t alphaB, uint16_t *colourResult, uint8_t *alphaResult, uint8_t mode) {
-	uint8_t F_A,F_B;
-	uint16_t alpha;
+// operation: result = a op b (mode defines op)
+bool surfaceBlend(uint16_t colourA, uint8_t alphaA, uint16_t colourB, uint8_t alphaB, uint16_t *colourResult, uint8_t *alphaResult, uint8_t mode) {
+	uint8_t F_A,F_B, alphaC;
+	uint16_t alpha,colourC;
 	uint32_t colour;
 	// depending on mode, select the right fractions (indicating the extent of contributions of A and B)
 	// see (Porter Duff, 1984) (https://doi.org/10.1145%2F800031.808606), p. 255
@@ -431,30 +928,30 @@ void blend(uint16_t colourA, uint8_t alphaA, uint16_t colourB, uint8_t alphaB, u
 			F_B = 255;
 			break;
 		default:
-			return;
+			return false;
 	}
 	// calculate compositing formula (cf. (Porter Duff, 1984), p. 256, adopted to alpha in [0,255])
 	alpha = (alphaA * F_A + alphaB * F_B) >> 8;
-	if (alpha == 0) {
-		// catch fully transparent composition
-		*alphaResult = 0;
-		*colourResult = 0;
-	} else {
-		// alpha and colour need to be limited to [0,255] due to the plus operator simply adding both
-		*alphaResult = (alpha > 255) ? 255 : (uint8_t)alpha;
-		// compose red channel
-		colour = ( alphaA * F_A * ((colourA >> 11) & 0x1f) + alphaB * F_B * ((colourB >> 11) & 0x1f) ) >> 16;
-		if (colour > 31) colour = 31;
-		*colourResult = (uint16_t)(colour << 11); 
-		// compose green channel
-		colour = ( alphaA * F_A * ((colourA >> 5) & 0x3f) + alphaB * F_B * ((colourB >> 5) & 0x3f) ) >> 16;
-		if (colour > 63) colour = 63;
-		*colourResult |= (uint16_t)(colour << 5); 
-		// compose blue channel
-		colour = ( alphaA * F_A * (colourA & 0x1f) + alphaB * F_B * (colourB & 0x1f) ) >> 16;
-		if (colour > 31) colour = 31;
-		*colourResult |= (uint16_t)colour;
-	}
+	alphaC = (alpha > 255) ? 255 : (uint8_t)alpha;
+	
+	// compose red channel
+	colour = ( alphaA * F_A * ((colourA >> 11) & 0x1f) + alphaB * F_B * ((colourB >> 11) & 0x1f) ) >> 16;
+	if (colour > 31) colour = 31;
+	colourC = (uint16_t)(colour << 11); 
+	// compose green channel
+	colour = ( alphaA * F_A * ((colourA >> 5) & 0x3f) + alphaB * F_B * ((colourB >> 5) & 0x3f) ) >> 16;
+	if (colour > 63) colour = 63;
+	colourC |= (uint16_t)(colour << 5); 
+	// compose blue channel
+	colour = ( alphaA * F_A * (colourA & 0x1f) + alphaB * F_B * (colourB & 0x1f) ) >> 16;
+	if (colour > 31) colour = 31;
+	colourC |= (uint16_t)colour;
+	
+	*alphaResult = alphaC;
+	*colourResult = colourC;
+	
+	// if A has modified B (B!=C), signal this by returning true
+	return (colourC != colourB || alphaC != alphaB);
 }
 
 

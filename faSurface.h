@@ -3,7 +3,7 @@
 /**
  * @file
  * @author Frank Abelbeck <frank.abelbeck@googlemail.com>
- * @version 2020-01-20
+ * @version 2020-02-06
  * 
  * @section License
  * 
@@ -142,12 +142,13 @@ Matrix getMatrixShearY(int16_t factor);
  * @param surface Pointer to a Surface.
  * @param sprite Pointer to a Surface.
  * @param destination Pointer to a Surface.
- * @param matrix 3-by-3 Transformation Matrix.
+ * @param matrix 3-by-3 Transformation Matrix structure.
  * @param alpha Transparency of the sprite during composition (multiplied with the sprite's own transparency).
  * @param mode A mode as defined by BLEND_*
  * @param boundingBoxSprite BoundingBox of the sprite are that should be displayed; use getBoundingBoxSurface(sprite) to display the entire sprite.
- * @returns A BoundingBox, receiving information on the transformed sprite's bounding box. If an error occurs, this is set to (0,0,0,0).
+ * @param mask Pointer to a SurfaceMod structure where changes to the surface are recorded.
+ * @returns A BoundingBox structure describing the smalles box enclosing the sprite on the surface.
  */
-BoundingBox compose(Surface *surface, Surface *sprite, Surface *destination, Matrix matrix, uint8_t alpha, uint8_t mode, BoundingBox boundingBoxSprite);
+BoundingBox compose(Surface *surface, Surface *sprite, Surface *destination, Matrix matrix, uint8_t alpha, uint8_t mode, BoundingBox boundingBoxSprite, SurfaceMod *mask);
 
 #endif // _FASURFACE_H

@@ -3,7 +3,7 @@
 /**
  * @file
  * @author Frank Abelbeck <frank.abelbeck@googlemail.com>
- * @version 2019-12-14
+ * @version 2020-02-06
  * 
  * @section License
  * 
@@ -48,7 +48,7 @@
 
 #define RET_MAGIC                 -10 ///< magic byte check failed
 #define RET_HEADER                -11 ///< header not first chunk or header invalid
-#define RET_DIMENSIONS            -12 ///< either width or height zero
+#define RET_DIMENSIONS            -12 ///< width or height not in supported range 1..255
 #define RET_BIT_DEPTH             -13 ///< invalid bit depth
 #define RET_COLOUR_TYPE           -14 ///< invalid colour type
 #define RET_COMPRESSION_METHOD    -15 ///< invalid compression method (not 0)
@@ -215,7 +215,7 @@ typedef struct PngData {
 	uint8_t   *scanlineCurrent; ///< Current scanline data (address of a byte array).
 	uint8_t   *scanlinePrevious; ///< Previous scanline data (address of a byte array).
 	uint8_t   samplesPerPixel; ///< Number of samples per pixel.
-	RGBA5658  (*funPixConv)(struct PngData*,uint16_t); ///< Address of a pixel conversion function.
+	RGBA5658  (*funPixConv)(struct PngData*,uint8_t); ///< Address of a pixel conversion function.
 	// chunk and file management
 // 	FILE      *file; ///< Address of a file stream.
 	int       file; ///< Address of a file stream.
@@ -248,15 +248,15 @@ typedef struct PngData {
  * 
  * @returns An initialised PngData structure.
  */
-PngData* constructPngData();
+PngData* pngDataConstruct();
 
-/** Destructor: free any allocated memory in a PngData structure.
+/** Destructor: free any allocated memory of a PngData structure.
  * 
- * This calls free on all pointers (and fclose on file) and sets sizes to zero.
+ * This calls free on all pointers (and fclose on file) and on the pngData structure itself.
  * 
  * @param self A PngData structure.
  */
-void destructPngData(PngData **self);
+void pngDataDestruct(PngData **self);
 
 /** Pixel conversion routine: RGBA5658 from 1 bit greyscale value.
  * 
@@ -264,7 +264,7 @@ void destructPngData(PngData **self);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure; alpha = 0xff.
  */
-RGBA5658 convertPixelGrey1(PngData *self, uint16_t x);
+RGBA5658 convertPixelGrey1(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 2 bit greyscale value.
  * 
@@ -272,7 +272,7 @@ RGBA5658 convertPixelGrey1(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure; alpha = 0xff.
  */
-RGBA5658 convertPixelGrey2(PngData *self, uint16_t x);
+RGBA5658 convertPixelGrey2(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 4 bit greyscale value.
  * 
@@ -280,7 +280,7 @@ RGBA5658 convertPixelGrey2(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure; alpha = 0xff.
  */
-RGBA5658 convertPixelGrey4(PngData *self, uint16_t x);
+RGBA5658 convertPixelGrey4(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 8 bit greyscale value.
  * 
@@ -288,7 +288,7 @@ RGBA5658 convertPixelGrey4(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure; alpha = 0xff.
  */
-RGBA5658 convertPixelGrey8(PngData *self, uint16_t x);
+RGBA5658 convertPixelGrey8(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 16 bit greyscale value.
  * 
@@ -296,7 +296,7 @@ RGBA5658 convertPixelGrey8(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure; alpha = 0xff.
  */
-RGBA5658 convertPixelGrey16(PngData *self, uint16_t x);
+RGBA5658 convertPixelGrey16(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 1 bit indexed value.
  * 
@@ -304,7 +304,7 @@ RGBA5658 convertPixelGrey16(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure; alpha = 0xff.
  */
-RGBA5658 convertPixelIndexed1(PngData *self, uint16_t x);
+RGBA5658 convertPixelIndexed1(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 2 bit indexed value.
  * 
@@ -312,7 +312,7 @@ RGBA5658 convertPixelIndexed1(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure; alpha = 0xff.
  */
-RGBA5658 convertPixelIndexed2(PngData *self, uint16_t x);
+RGBA5658 convertPixelIndexed2(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 4 bit indexed value.
  * 
@@ -320,7 +320,7 @@ RGBA5658 convertPixelIndexed2(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure; alpha = 0xff.
  */
-RGBA5658 convertPixelIndexed4(PngData *self, uint16_t x);
+RGBA5658 convertPixelIndexed4(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 8 bit indexed value.
  * 
@@ -328,7 +328,7 @@ RGBA5658 convertPixelIndexed4(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure; alpha = 0xff.
  */
-RGBA5658 convertPixelIndexed8(PngData *self, uint16_t x);
+RGBA5658 convertPixelIndexed8(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 8 bit RGB value.
  * 
@@ -336,7 +336,7 @@ RGBA5658 convertPixelIndexed8(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure; alpha = 0xff.
  */
-RGBA5658 convertPixelRGB8(PngData *self, uint16_t x);
+RGBA5658 convertPixelRGB8(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 16 bit RGB value.
  * 
@@ -344,7 +344,7 @@ RGBA5658 convertPixelRGB8(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure; alpha = 0xff.
  */
-RGBA5658 convertPixelRGB16(PngData *self, uint16_t x);
+RGBA5658 convertPixelRGB16(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 8 bit greyscale+alpha value.
  * 
@@ -352,7 +352,7 @@ RGBA5658 convertPixelRGB16(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure.
  */
-RGBA5658 convertPixelGreyA8(PngData *self, uint16_t x);
+RGBA5658 convertPixelGreyA8(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 16 bit greyscale+alpha value.
  * 
@@ -360,7 +360,7 @@ RGBA5658 convertPixelGreyA8(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure.
  */
-RGBA5658 convertPixelGreyA16(PngData *self, uint16_t x);
+RGBA5658 convertPixelGreyA16(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 8 bit RGB+alpha value.
  * 
@@ -368,7 +368,7 @@ RGBA5658 convertPixelGreyA16(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure.
  */
-RGBA5658 convertPixelRGBA8(PngData *self, uint16_t x);
+RGBA5658 convertPixelRGBA8(PngData *self, uint8_t x);
 
 /** Pixel conversion routine: RGBA5658 from 16 bit RGB+alpha value.
  * 
@@ -376,7 +376,7 @@ RGBA5658 convertPixelRGBA8(PngData *self, uint16_t x);
  * @param x row position in current scanline.
  * @returns An RGBA5658 pixel information structure.
  */
-RGBA5658 convertPixelRGBA16(PngData *self, uint16_t x);
+RGBA5658 convertPixelRGBA16(PngData *self, uint8_t x);
 /** Read the chunk header at current file position.
  * 
  * This function sets self->lenChunk and self->typeChunk and does some
@@ -474,6 +474,7 @@ int8_t generateHuffmanCodes(uint16_t numLengths, uint8_t *lengths, uint32_t **co
  * @param numBytes Number of bytes to read/decode.
  * @returns A signed byte (int8_t) with one of the following return codes:
  *     - RET_OK: all bytes successfully read.
+ *     - RET_MALLOC_IMAGE: invalid Surface pointer passed.
  *     - RET_ZLIB_COMPRESSION: invalid zlib compression method.
  *     - RET_ZLIB_WINSIZE: invalid zlib decode window size.
  *     - RET_PRESET_DICT: zlib stream features preset dictionary (shall not appear in PNG).
@@ -531,7 +532,7 @@ uint16_t PaethPredictor(uint16_t a, uint16_t b, uint16_t c);
  *     - any error reported by seekChunk().
  *     - any error reported by readScanline().
  */
-int8_t readPNG(PngData *self, char *filename, Surface *image);
+int8_t pngDataRead(PngData *self, char *filename, Surface *image);
 
 /** PNG reading wrapper function. Load the PNG file with given filename.
  * 
@@ -540,6 +541,6 @@ int8_t readPNG(PngData *self, char *filename, Surface *image);
  * @param filename Address of a filename string (char array).
  * @returns A pointer to a surface with the image bitmap data. Might be NULL if something went wrong.
  */
-Surface *loadImage(char *filename);
+Surface *pngDataLoad(char *filename);
 
 #endif // _FAREADPNG_H

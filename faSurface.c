@@ -1,7 +1,7 @@
 /**
  * @file
  * @author Frank Abelbeck <frank.abelbeck@googlemail.com>
- * @version 2020-01-20
+ * @version 2020-02-06
  * 
  * @section License
  * 
@@ -102,8 +102,8 @@ Matrix invertMatrix(Matrix m) {
 Matrix getMatrixRotate(int16_t angle) {
 	Matrix result;
 	angle = (360 + (angle % 360)) % 360;
-	int16_t ca = faCos(angle); 
-	int16_t sa = faSin(angle); 
+	int16_t ca = surfaceCosine(angle); 
+	int16_t sa = surfaceSine(angle); 
 	result.xx = ca;
 	result.xy = -sa;
 	result.xz = 0;
@@ -166,7 +166,7 @@ Matrix getMatrixShearY(int16_t factor) {
 //------------------------------------------------------------------------------
 
 // paint sprite transformed by given matrix on surface, using given transparency value and blend mode
-BoundingBox compose(Surface *surface, Surface *sprite, Surface *destination, Matrix matrix, uint8_t alpha, uint8_t mode, BoundingBox boundingBoxSprite) {
+BoundingBox compose(Surface *surface, Surface *sprite, Surface *destination, Matrix matrix, uint8_t alpha, uint8_t mode, BoundingBox boundingBoxSprite, SurfaceMod *mask) {
 	// 2020-01-09: move from "3 shears" to "general affine transformation", i.e. p' = A*p
 	//             problem: interpolation
 	//             anti-aliasing/interpolation via blendFractional() does not work
@@ -176,7 +176,9 @@ BoundingBox compose(Surface *surface, Surface *sprite, Surface *destination, Mat
 	//              - iteratore over surface coordinates of the bounding box
 	//              - calculate p = A^-1 * p', i.e. get sprite coordinates and paint surface coordinates accordingly
 	// 2020-01-20: introduced boundingBoxSprite parameter
-	BoundingBox boundingBox = createBoundingBox(0,0,0,0);
+	// 2020-02-03: changed to SurfaceMod update mask handling
+	// 2020-02-05: removed boundingBox return value, using mask parameter instead
+	BoundingBox boundingBox = boundingBoxCreate(0,0,0,0);
 	
 	// sanity check: bail out if invalid parameters were given
 	if (surface == NULL || sprite == NULL || destination == NULL || \
@@ -262,7 +264,8 @@ BoundingBox compose(Surface *surface, Surface *sprite, Surface *destination, Mat
 		if (boundingBox.min.y >= surface->height) return boundingBox; // minimum y value greater than height: not visible, exit function
 	}
 	
-	// bounding box and surface overlap, continue
+	// bounding box and surface overlap
+	
 	// calculate inverse of transformation matrix
 	Matrix inverse = invertMatrix(matrix);
 	
@@ -271,8 +274,9 @@ BoundingBox compose(Surface *surface, Surface *sprite, Surface *destination, Mat
 	uint32_t iSurface = boundingBox.min.y * surface->width + boundingBox.min.x;
 	uint32_t diSurface = surface->width - (boundingBox.max.x - boundingBox.min.x) - 1;
 	uint32_t iSprite;
-	
+	uint32_t bitmask;
 	for (y = boundingBox.min.y; y <= boundingBox.max.y; y++) {
+		bitmask = 0;
 		for (x = boundingBox.min.x; x <= boundingBox.max.x; x++) {
 			// calculate sprite coordinates:
 			// 1) apply inverse matrix
@@ -295,18 +299,21 @@ BoundingBox compose(Surface *surface, Surface *sprite, Surface *destination, Mat
 			// 3) calculate sprite pixel index
 			iSprite = ySprite * sprite->width + xSprite;
 			
-			// 4) blend pixel (destination = sprite op surface)
-			blend(
+			// 4) blend pixel (destination = sprite op surface) and add pixel to mask if destination was changed
+			if (surfaceBlend(
 				sprite->rgb565[iSprite],(alpha * sprite->alpha[iSprite]) >> 8,
 				surface->rgb565[iSurface],surface->alpha[iSurface],
 				&destination->rgb565[iSurface],&destination->alpha[iSurface],
-				mode
-			);
+				mode)) {
+				// pixel changed: mark in bitmask
+				bitmask |= 1 << (x >> 3);
+			}
 			
 			// next pixel
 			iSurface++;
 		} // for x
 		// skip remainder of line and beginning of next line (xMax --> width, xMin)
+		surfaceModSetRow(mask,y,bitmask);
 		iSurface += diSurface;
 	} // for y
 	

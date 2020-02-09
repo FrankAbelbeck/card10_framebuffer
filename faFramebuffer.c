@@ -1,7 +1,7 @@
 /**
  * @file
  * @author Frank Abelbeck <frank.abelbeck@googlemail.com>
- * @version 2020-01-16
+ * @version 2020-02-06
  * 
  * @section License
  * 
@@ -28,19 +28,19 @@
 #include "faFramebuffer.h"
 #include "faSurface.h" // access to surface structures
 
-union disp_framebuffer *constructFramebuffer(uint16_t colour) {
+union disp_framebuffer *framebufferConstruct(uint16_t colour) {
 	// allocate framebuffer memory
 	union disp_framebuffer *fb = (union disp_framebuffer*)malloc(sizeof(union disp_framebuffer));
-	clearFramebuffer(fb,colour);
+	framebufferClear(fb,colour);
 	return fb;
 }
 
-void destructFramebuffer(union disp_framebuffer **fb) {
+void framebufferDestruct(union disp_framebuffer **fb) {
 	free(*fb);
 	*fb = NULL;
 }
 
-void clearFramebuffer(union disp_framebuffer *framebuffer, uint16_t colour) {
+void framebufferClear(union disp_framebuffer *framebuffer, uint16_t colour) {
 	if (framebuffer != NULL) {
 		// fill framebuffer with given colour
 		// note: framebuffer index addressing is reversed!
@@ -52,7 +52,7 @@ void clearFramebuffer(union disp_framebuffer *framebuffer, uint16_t colour) {
 	}
 }
 
-void copySurfaceToFramebuffer(Surface *surface, union disp_framebuffer *framebuffer) {
+void framebufferCopySurface(union disp_framebuffer *framebuffer, Surface *surface) {
 	if (framebuffer == NULL || surface == NULL) return;
 	uint32_t iSurface = 0;
 	uint32_t iFramebuffer = ((DISP_HEIGHT * DISP_WIDTH) << 1) - 1;
@@ -63,12 +63,38 @@ void copySurfaceToFramebuffer(Surface *surface, union disp_framebuffer *framebuf
 	} while (iFramebuffer > 1);
 }
 
-/** Send the contents of given framebuffer to the display.
- *
- * @param fb pointer to a framebuffer.
- * @returns either 0 on success or EBUSY (display already locked).
+void framebufferUpdateFromSurface(union disp_framebuffer *framebuffer, Surface *surface, SurfaceMod *mask) {
+	if (framebuffer == NULL || surface == NULL || mask == NULL || surface->width != DISP_WIDTH || surface->height != DISP_HEIGHT || DISP_HEIGHT > mask->height) return;
+	
+	uint32_t bitmask;
+	uint8_t x;
+	uint32_t iFramebuffer = ((DISP_WIDTH * DISP_HEIGHT) << 1) - 1;
+	uint16_t iSurface = 0;
+	for (uint8_t y = 0; y < surface->height; y++) {
+		bitmask = mask->tile[y >> 3];
+		if (bitmask == 0) {
+			// empty bitmask: nothing to do for this and the next seven rows
+			iSurface += surface->width << 3;
+			iFramebuffer -= surface->width << 4;
+			y += 7;
+			continue;
+		}
+		for (x = 0; x < surface->width; x++) {
+			if ((1 << (x >> 3)) & bitmask) {
+				framebuffer->raw[iFramebuffer--] = surface->rgb565[iSurface] & 0xff;
+				framebuffer->raw[iFramebuffer--] = surface->rgb565[iSurface] >> 8;
+			} else {
+				iFramebuffer -= 2;
+			}
+			iSurface++;
+		}
+	}
+}
+
+/* Send the contents of given framebuffer to the display and
+ * returns either 0 on success or EBUSY (display already locked).
  */
-int redraw(union disp_framebuffer *fb) {
+int framebufferRedraw(union disp_framebuffer *fb) {
 	// lock display
 	int retval = epic_disp_open();
 	if (retval != 0) return retval;

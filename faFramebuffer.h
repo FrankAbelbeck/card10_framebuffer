@@ -3,7 +3,7 @@
 /**
  * @file
  * @author Frank Abelbeck <frank.abelbeck@googlemail.com>
- * @version 2020-01-16
+ * @version 2020-02-06
  * 
  * @section License
  * 
@@ -33,20 +33,20 @@
  * @param colour A 16-bit colour value (RGB565) with which to initialise the framebuffer area.
  * @returns A pointer to a framebuffer structure or NULL if something went wrong.
  */
-union disp_framebuffer *constructFramebuffer(uint16_t colour);
+union disp_framebuffer *framebufferConstruct(uint16_t colour);
 
 /** Destructor: free any allocated memory of a framebuffer structure.
  * 
  * @param fb Pointer to a framebuffer structure.
  */
-void destructFramebuffer(union disp_framebuffer **fb);
+void framebufferDestruct(union disp_framebuffer **fb);
 
 /** Clear framebuffer by setting all pixels to the given colour.
  * 
  * @param framebuffer Pointer to a framebuffer structure.
  * @param colour A 16-bit colour value (RGB565).
  */
-void clearFramebuffer(union disp_framebuffer *framebuffer, uint16_t colour);
+void framebufferClear(union disp_framebuffer *framebuffer, uint16_t colour);
 
 /** Copy a surface to the framebuffer, replacing the framebuffer contents.
  * Does nothing if surface dimensions don't match framebuffer dimensions.
@@ -56,13 +56,24 @@ void clearFramebuffer(union disp_framebuffer *framebuffer, uint16_t colour);
  * @param framebuffer pointer to a framebuffer structure.
  * @param surface Pointer to a Surface.
  */
-void copySurfaceToFramebuffer(Surface *surface, union disp_framebuffer *framebuffer);
+void framebufferCopySurface(union disp_framebuffer *framebuffer, Surface *surface);
+
+/** Update a framebuffer from a surface, applying a surface modification mask.
+ * Does nothing if surface dimensions don't match framebuffer dimensions.
+ * 
+ * Works in place, modifies given framebuffer structure!
+ * 
+ * @param framebuffer pointer to a framebuffer structure.
+ * @param surface Pointer to a Surface.
+ * @param mask Pointer to a SurfaceMod structure.
+ */
+void framebufferUpdateFromSurface(union disp_framebuffer *framebuffer, Surface *surface, SurfaceMod *mask);
 
 /** Send the contents of a given framebuffer to the display.
  *
- * @param fb pointer to a framebuffer.
+ * @param framebuffer pointer to a framebuffer.
  * @returns either 0 (success) or EBUSY (display already locked).
  */
-int redraw(union disp_framebuffer *fb);
+int framebufferRedraw(union disp_framebuffer *fb);
 
 #endif // _FAFRAMEBUFFER_H
