@@ -1,7 +1,7 @@
 /**
  * @file
  * @author Frank Abelbeck <frank.abelbeck@googlemail.com>
- * @version 2020-02-06
+ * @version 2020-02-14
  * 
  * @section License
  * 
@@ -107,7 +107,6 @@ void surfaceCopy(Surface *source, Surface *destination, SurfaceMod *mask) {
 	uint32_t bitmask;
 	uint8_t x;
 	uint16_t i = 0;
-	
 	for (uint8_t y = 0; y < source->height; y++) {
 		bitmask = mask->tile[y >> 3];
 		if (bitmask == 0) {
@@ -125,6 +124,7 @@ void surfaceCopy(Surface *source, Surface *destination, SurfaceMod *mask) {
 		}
 	}
 }
+
 
 Point createPoint(int32_t x, int32_t y) {
 	Point p;
@@ -245,7 +245,7 @@ BoundingBox surfaceDrawLine(Surface *surface, Point p0, Point p1, uint16_t colou
 		bb.max.x = p0.x;
 	}
 	
-	// since p1.y is always >= p0.y (see above), there is only one stepping calculation case
+	// calculate the y direction of the line and stepping parameters
 	if (p1.y > p0.y) {
 		yDiff = p0.y - p1.y;
 		yStep = 1;
@@ -260,8 +260,7 @@ BoundingBox surfaceDrawLine(Surface *surface, Point p0, Point p1, uint16_t colou
 	
 	// setup error variables
 	int16_t error  = xDiff+yDiff;
-	int16_t error2 = 0;
-	int16_t i;
+	int16_t error2, i;
 	uint32_t bitmask = 0;
 	
 	// use x0,y0 as running coordinate pair, calculate new coordinates as long as p1.x,p1.y is not reached
@@ -291,7 +290,7 @@ BoundingBox surfaceDrawLine(Surface *surface, Point p0, Point p1, uint16_t colou
 		if (error2 < xDiff) {
 			surfaceModSetRow(mask,p0.y,bitmask);
 			bitmask = 0;
-			// error inside yDiff bounds: step in x direction, update error term
+			// error inside xDiff bounds: step in y direction, update error term
 			error += xDiff;
 			p0.y += yStep;
 		}
@@ -328,11 +327,6 @@ BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint1
 	bb.max.x = pm.x + radius;
 	bb.min.y = pm.y - radius;
 	bb.max.y = pm.y + radius;
-	
-	if (bb.min.x < 0) bb.min.x = 0;
-	if (bb.min.y < 0) bb.min.y = 0;
-	if (bb.max.x >= surface->width) bb.max.x = surface->width - 1;
-	if (bb.max.y >= surface->height) bb.max.y = surface->height - 1;
 	
 	p.x = 0;
 	p.y = radius;
@@ -458,6 +452,137 @@ BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint1
 	return bb;
 }
 
+BoundingBox surfaceDrawDisc(Surface *surface, Point pm, uint16_t radius, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask) {
+	BoundingBox bb = boundingBoxCreate(0,0,0,0);
+	// uses same Bresenham-like algorithm as used in surfaceDrawCircle,
+	// but draws horizontal lines inbetween, i.e. between edge pixels in
+	// sectors 5+6, 4+7, 3+8, 2+1 (see diagram):
+	//
+	//   .  |  .
+	//    .5|6.
+	//   4 .|. 7
+	//  ----+---->
+	//   3 .|. 0
+	//    .2|1.
+	//   .  |  .
+	//      V
+	//
+	// TODO: the approach below is not effective:
+	//  - only draw line if y switches
+	//  - otherwise record xStart and xEnd for each of the possible four scanlines
+	//
+	if (surface == NULL || radius == 0) return bb;
+	
+	int16_t  error = 1 - radius;
+	int16_t  ddE_x = 0;
+	int16_t  ddE_y = -2 * radius;
+	uint16_t i,iMax;
+	Point    p;
+	int16_t  xStart,xEnd;
+	int16_t  y;
+	uint32_t bitmask;
+	
+	bb.min.x = pm.x - radius;
+	bb.max.x = pm.x + radius;
+	bb.min.y = pm.y - radius;
+	bb.max.y = pm.y + radius;
+	
+	p.x = 0;
+	p.y = radius;
+	
+	do {
+		// update error term to check which axis needs stepping
+		if (error >= 0) {
+			// error term positive: y stepping imminent
+			// process horizontal lines 1 and 2 first
+			// #1: (pm.x-p.x, pm.y-p.y) --> (pm.x+p.x, pm.y-p.y)
+			// #2: (pm.x-p.x, pm.y+p.y) --> (pm.x+p.x, pm.y+p.y)
+			xStart = pm.x - p.x;
+			if (xStart < 0) xStart = 0;
+			xEnd = pm.x + p.x;
+			if (xEnd >= surface->width) xEnd = surface->width - 1;
+			y = pm.x - p.y;
+			if (y >= 0 && y < surface->height && xStart < surface->width && xEnd >= 0) {
+				i = y * surface->width;
+				iMax = i + xEnd;
+				bitmask = 0;
+				for (i += xStart; i <= iMax; i++) {
+					if (surfaceBlend(
+						colour,alpha,
+						surface->rgb565[i],surface->alpha[i],
+						&surface->rgb565[i],&surface->alpha[i],
+						mode)) bitmask |= 1 << (xStart >> 3);
+					xStart++;
+				}
+				surfaceModSetRow(mask,y,bitmask);
+			}
+			y = pm.x + p.y;
+			if (y >= 0 && y < surface->height && xStart < surface->width && xEnd >= 0) {
+				i = y * surface->width;
+				iMax = i + xEnd;
+				bitmask = 0;
+				for (i += xStart; i <= iMax; i++) {
+					if (surfaceBlend(
+						colour,alpha,
+						surface->rgb565[i],surface->alpha[i],
+						&surface->rgb565[i],&surface->alpha[i],
+						mode)) bitmask |= 1 << (xStart >> 3);
+					xStart++;
+				}
+				surfaceModSetRow(mask,y,bitmask);
+			}
+			// also reduce running y var (going von radius to 0) and update error term
+			p.y--;
+			ddE_y += 2;
+			error += ddE_y;
+		}
+		
+		// x stepping imminent: process horizontal lines 3 and 4
+		// #3: (pm.x-p.y, pm.y-p.x) --> (pm.x+p.y, pm.y-p.x)
+		// #4: (pm.x-p.y, pm.y+p.x) --> (pm.x+p.y, pm.y+p.x)
+		xStart = pm.x - p.y;
+		if (xStart < 0) xStart = 0;
+		xEnd = pm.x + p.y;
+		if (xEnd >= surface->width) xEnd = surface->width - 1;
+		y = pm.x - p.x;
+		if (y >= 0 && y < surface->height && xStart < surface->width && xEnd >= 0) {
+			i = y * surface->width;
+			iMax = i + xEnd;
+			bitmask = 0;
+			for (i += xStart; i <= iMax; i++) {
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) bitmask |= 1 << (xStart >> 3);
+				xStart++;
+			}
+			surfaceModSetRow(mask,y,bitmask);
+		}
+		y = pm.x + p.x;
+		if (y >= 0 && y < surface->height && xStart < surface->width && xEnd >= 0) {
+			i = y * surface->width;
+			iMax = i + xEnd;
+			bitmask = 0;
+			for (i += xStart; i <= iMax; i++) {
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) bitmask |= 1 << (xStart >> 3);
+				xStart++;
+			}
+			surfaceModSetRow(mask,y,bitmask);
+		}
+		
+		// increase x var and update error term
+		p.x++;
+		ddE_x += 2;
+		error += ddE_x + 1;
+	} while (p.x < p.y);
+	
+	return bb;
+}
 
 BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t angleStart, int16_t angleStop, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask) {
 	BoundingBox bb = boundingBoxCreate(0,0,0,0);
@@ -505,13 +630,7 @@ BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t 
 	bb.min.y = pm.y - radius;
 	bb.max.y = pm.y + radius;
 	
-	if (bb.min.x < 0) bb.min.x = 0;
-	if (bb.min.y < 0) bb.min.y = 0;
-	if (bb.max.x >= surface->width) bb.max.x = surface->width - 1;
-	if (bb.max.y >= surface->height) bb.max.y = surface->height - 1;
-	
 	// --- TODO: modify circle bounding box to arc ---
-	
 	
 	// setup a bitmask for all octants and -- depending on angles -- set bits for octants that need processing
 	uint8_t octantStart = angleStart/45;
@@ -646,18 +765,361 @@ BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t 
 		p.x++;
 		ddE_x += 2;
 		error += ddE_x + 1;
+		
 	} while (p.x < p.y);
 	
 	return bb;
 }
 
+
+
+// internal helper function; not for public use:
+// - special case "triangle standing on tip with base line parallel to x axis"
+// - no argument safeguards
+// - assumes p0, p1 and p2 are ordered (ascending y values)
+// - assumes p0 and p1 have equal y values
+// iterate from p0.y to p2.y, compute edges p0p2 and p1p2 and fill space inbetween
+// this adapts the Bresenham implementation of surfaceDrawLine()
+void surfaceDrawTriangleFlatTop(Surface *surface, Point p0, Point p1, Point p2, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask) {
+	int16_t xLeft,xRight,xLeftDiff,xRightDiff;
+	int16_t errorLeft,errorLeft2,errorRight,errorRight2;
+	int8_t  xLeftStep,xRightStep;
+	int16_t yDiff = p0.y - p2.y; // assumption: both start points have the same y value
+	uint16_t i,iRow,iMax;
+	uint32_t bitmask;
+	
+	// determine left and right edges
+	if (p0.x < p1.x) {
+		// left edge: p0p2
+		// right edge: p1p2
+		xLeft = p0.x;
+		xRight = p1.x;
+		if (p2.x > p0.x) {
+			xLeftDiff = p2.x - p0.x;
+			xLeftStep = 1;
+		} else {
+			xLeftDiff = p0.x - p2.x;
+			xLeftStep = -1;
+		}
+		if (p2.x > p1.x) {
+			xRightDiff = p2.x - p1.x;
+			xRightStep = 1;
+		} else {
+			xRightDiff = p1.x - p2.x;
+			xRightStep = -1;
+		}
+	} else {
+		xLeft = p1.x;
+		xRight = p0.x;
+		// left edge: p1p2
+		// right edge: p0p2
+		if (p2.x > p1.x) {
+			xLeftDiff = p2.x - p1.x;
+			xLeftStep = 1;
+		} else {
+			xLeftDiff = p1.x - p2.x;
+			xLeftStep = -1;
+		}
+		if (p2.x > p0.x) {
+			xRightDiff = p2.x - p0.x;
+			xRightStep = 1;
+		} else {
+			xRightDiff = p0.x - p2.x;
+			xRightStep = -1;
+		}
+	}
+	
+	errorLeft = xLeftDiff + yDiff;
+	errorRight = xRightDiff + yDiff;
+	
+	// since all points are sorted vertically, only positive +1 y stepping is used
+	
+	iRow = p0.y * surface->width;
+	for (; p0.y <= p2.y; p0.y++) {
+		// check that at least a part of the line-to-draw is visible
+		if (xLeft < surface->width && xRight >= 0) {
+			// clip x at left and right surface border; re-use point x components as storage
+			p0.x = (xLeft < 0) ? 0 : xLeft;
+			p1.x = (xRight >= surface->width) ? surface->width - 1 : xRight;
+			
+			// draw horizontal line at current y
+			bitmask = 0;
+			iMax = iRow + p1.x;
+			for (i = iRow + p0.x; i <= iMax; i++) {
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode
+				)) bitmask |= 1 << (p0.x >> 3);
+				p0.x++;
+			}
+			surfaceModSetRow(mask,p0.y,bitmask);
+		}
+		iRow += surface->width;
+		
+		// update error terms until a step in y direction is needed
+		do {
+			errorLeft2 = errorLeft + errorLeft;
+			if (errorLeft2 <= yDiff) break;
+			// error inside yDiff bounds: step in x direction, update error term
+			errorLeft += yDiff;
+			xLeft += xLeftStep;
+		} while (errorLeft2 >= xLeftDiff);
+		errorLeft += xLeftDiff;
+		
+		do {
+			errorRight2 = errorRight + errorRight;
+			if (errorRight2 <= yDiff) break;
+			// error inside yDiff bounds: step in x direction, update error term
+			errorRight += yDiff;
+			xRight += xRightStep;
+		} while (errorRight2 >= xRightDiff);
+		errorRight += xRightDiff;
+	}
+}
+
+// internal helper function; not for public use:
+// - special case "triangle resting on baseline parallel to x axis"
+// - no argument safeguards
+// - assumes p0, p1 and p2 are ordered (ascending y values)
+// - assumes p1 and p2 have equal y values
+// iterate from p0.y to p2.y, compute edges p0p1 and p0p2 and fill space inbetween
+// this adapts the Bresenham implementation of surfaceDrawLine()
+void surfaceDrawTriangleFlatBottom(Surface *surface, Point p0, Point p1, Point p2, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask) {
+	int16_t xLeft,xRight,xLeftDiff,xRightDiff;
+	int16_t errorLeft,errorLeft2,errorRight,errorRight2;
+	int16_t yDiff = p0.y - p2.y; // assumption: both end points have the same y value
+	int8_t  xLeftStep,xRightStep;
+	uint16_t i,iRow,iMax;
+	uint32_t bitmask;
+	
+	// determine left and right edges; both edges share the same starting point p0
+	xLeft = p0.x;
+	xRight = p0.x;
+	if (p1.x < p2.x) {
+		// left edge: p0p1
+		// right edge: p0p2
+		if (p1.x > p0.x) {
+			xLeftDiff = p1.x - p0.x;
+			xLeftStep = 1;
+		} else {
+			xLeftDiff = p0.x - p1.x;
+			xLeftStep = -1;
+		}
+		if (p2.x > p0.x) {
+			xRightDiff = p2.x - p0.x;
+			xRightStep = 1;
+		} else {
+			xRightDiff = p0.x - p2.x;
+			xRightStep = -1;
+		}
+	} else {
+		// left edge: p0p2
+		// right edge: p0p1
+		if (p2.x > p0.x) {
+			xLeftDiff = p2.x - p0.x;
+			xLeftStep = 1;
+		} else {
+			xLeftDiff = p0.x - p2.x;
+			xLeftStep = -1;
+		}
+		if (p1.x > p0.x) {
+			xRightDiff = p1.x - p0.x;
+			xRightStep = 1;
+		} else {
+			xRightDiff = p0.x - p1.x;
+			xRightStep = -1;
+		}
+	}
+	
+	errorLeft = xLeftDiff + yDiff;
+	errorRight = xRightDiff + yDiff;
+	
+	// since all points are sorted vertically, only positive +1 y stepping is used
+	// but: different y values for end points p1 and p2! --> yLeftDiff, yRightDiff 
+	
+	iRow = p0.y * surface->width;
+	for (; p0.y <= p2.y; p0.y++) {
+		// check that at least a part of the line-to-draw is visible
+		if (xLeft < surface->width && xRight >= 0) {
+			// clip x at left and right surface border; re-use point x components as storage
+			p0.x = (xLeft < 0) ? 0 : xLeft;
+			p1.x = (xRight >= surface->width) ? surface->width - 1 : xRight;
+			
+			// draw horizontal line at current y
+			bitmask = 0;
+			iMax = iRow + p1.x;
+			for (i = iRow + p0.x; i <= iMax; i++) {
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode
+				)) bitmask |= 1 << (p0.x >> 3);
+				p0.x++;
+			}
+			surfaceModSetRow(mask,p0.y,bitmask);
+		}
+		iRow += surface->width;
+		
+		// update error terms until a step in y direction is needed
+		do {
+			errorLeft2 = errorLeft + errorLeft;
+			if (errorLeft2 <= yDiff) break;
+			// error inside yDiff bounds: step in x direction, update error term
+			errorLeft += yDiff;
+			xLeft += xLeftStep;
+		} while (errorLeft2 >= xLeftDiff);
+		errorLeft += xLeftDiff;
+		
+		do {
+			errorRight2 = errorRight + errorRight;
+			if (errorRight2 <= yDiff) break;
+			// error inside yDiff bounds: step in x direction, update error term
+			errorRight += yDiff;
+			xRight += xRightStep;
+		} while (errorRight2 >= xRightDiff);
+		errorRight += xRightDiff;
+	}
+}
+
+
 BoundingBox surfaceDrawTriangle(Surface *surface, Point p0, Point p1, Point p2, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask) {
 	BoundingBox bb = boundingBoxCreate(0,0,0,0);
+	// sanity check: bail out if surface or mask are invalid
+	if (surface == NULL || mask == NULL) return bb;
+	
+	Point p11,p21;
+	
+	// sort points from smallest to largest y component by insertion
+	if (p0.y > p1.y) {
+		p11 = p0;
+		p0 = p1;
+		p1 = p11;
+	}
+	if (p1.y > p2.y) {
+		p11 = p1;
+		p1 = p2;
+		p2 = p11;
+	}
+	if (p0.y > p1.y) {
+		p11 = p0;
+		p0 = p1;
+		p1 = p11;
+	}
+	
+	// estimate bounding box: y already sorted; check for smallest/largest x
+	bb.min.y = p0.y;
+	bb.max.y = p2.y;
+	
+	bb.min.x = p0.x;
+	if (p1.x < bb.min.x) bb.min.x = p1.x;
+	if (p2.x < bb.min.x) bb.min.x = p2.x;
+	
+	bb.max.x = p0.x;
+	if (p1.x > bb.max.x) bb.max.x = p1.x;
+	if (p2.x > bb.max.x) bb.max.x = p2.x;
+	
+	// exit if bounding box is outside surface area
+	if (bb.min.x >= surface->width || bb.max.x < 0 || bb.min.y >= surface->height || bb.max.y < 0) return bb;
+	
+	// manage different triangle variants
+	if (p0.y == p1.y) {
+		if (p1.y == p2.y) {
+			// case 1: degenerated triangle as horizontal line
+			// draw line from bb.min.x to bb.max.x
+			uint16_t i = bb.min.y * surface->width;
+			uint16_t iMax = i + bb.max.x;
+			uint32_t bitmask = 0;
+			p0.x = bb.min.x;
+			for (i += bb.min.x; i <= iMax; i++) {
+				if (surfaceBlend(
+					colour,alpha,
+					surface->rgb565[i],surface->alpha[i],
+					&surface->rgb565[i],&surface->alpha[i],
+					mode)) bitmask |= 1 << (p0.x >> 3);
+				p0.x++;
+			}
+			surfaceModSetRow(mask, bb.min.y, bitmask);
+		} else {
+			// case 2: triangle standing on tip, base line parallel to x axis (=flat top triangle)
+			surfaceDrawTriangleFlatTop(surface,p0,p1,p2,colour,alpha,mode,mask);
+		}
+	} else {
+		if (p1.y == p2.y) {
+			// case 3: triangle resting on baseline parallel to x axis
+			// iterate from p0.y to p1.y, compute edges p0p1 and p0p2 and fill space inbetween
+			surfaceDrawTriangleFlatBottom(surface,p0,p1,p2,colour,alpha,mode,mask);
+		} else {
+			// case 4: all points on different rows; split into two triangles (first case 3, then case 2)
+			// first triangle: from p0 to p11 and p12 (p11 on edge p0p1 with y=p1.y-1 and p12 on edge p0p2 with y=p1.y-1)
+			// second triangle: from p1 and p13 to p2 (p13 on edge p0p1 with y=p1.y)
+			
+			p11.y = p1.y - 1;
+			p11.x = p0.x + (p11.y - p0.y) * (p1.x - p0.x) / (p1.y - p0.y);
+			
+			p21.y = p1.y - 1;
+			p21.x = p0.x + (p21.y - p0.y) * (p2.x - p0.x) / (p2.y - p0.y);
+			
+			surfaceDrawTriangleFlatBottom(surface,p0,p11,p21,colour,alpha,mode,mask);
+			
+			p21.y = p1.y;
+			p21.x = p0.x + (p21.y - p0.y) * (p2.x - p0.x) / (p2.y - p0.y);
+			
+			surfaceDrawTriangleFlatTop(surface,p1,p21,p2,colour,alpha,mode,mask);
+		}
+	}
+	
 	return bb;
 }
 
+
 BoundingBox surfaceDrawRectangle(Surface *surface, Point p0, Point p1, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask) {
-	BoundingBox bb = boundingBoxCreate(0,0,0,0);
+	if (surface == NULL || mask == NULL) return boundingBoxCreate(0,0,0,0);
+	
+	// populate bounding box, ensure min < max; exit if not visible
+	BoundingBox bb;
+	if (p0.x < p1.x) {
+		bb.min.x = p0.x;
+		bb.max.x = p1.x;
+	} else {
+		bb.min.x = p1.x;
+		bb.max.x = p0.x;
+	}
+	if (p0.y < p1.y) {
+		bb.min.y = p0.y;
+		bb.max.y = p1.y;
+	} else {
+		bb.min.y = p1.y;
+		bb.max.y = p0.y;
+	}
+	if (bb.min.x >= surface->width || bb.max.x < 0 || bb.min.y >= surface->height || bb.max.y < 0) return bb;
+	
+	// limit min/max to visible surface area
+	uint8_t xMin = (bb.min.x >= 0) ? bb.min.x : 0;
+	uint8_t yMin = (bb.min.y >= 0) ? bb.min.y : 0;
+	uint8_t xMax = (bb.max.x < surface->width) ? bb.max.x : surface->width - 1;
+	uint8_t yMax = (bb.max.y < surface->height) ? bb.max.y : surface->height - 1;
+	
+	uint8_t x,y;
+	uint32_t bitmask;
+	uint16_t i = yMin * surface->width + xMin;
+	uint16_t di = surface->width - xMax + xMin - 1;
+	for (y = yMin; y <= yMax; y++) {
+		bitmask = 0;
+		for (x = xMin; x <= xMax; x++) {
+			if (surfaceBlend(
+				colour,alpha,
+				surface->rgb565[i],surface->alpha[i],
+				&surface->rgb565[i],&surface->alpha[i],
+				mode)) bitmask |= 1 << (x >> 3);
+			i++;
+		}
+		surfaceModSetRow(mask,y,bitmask);
+		i += di;
+	}
+	
 	return bb;
 }
 
@@ -887,6 +1349,146 @@ int16_t surfaceCosine(int16_t x) {
 	// cos = sin, phase-shifted by 90 degrees
 	return surfaceSine(x + 90);
 }
+
+// return acos(x) for x in [-1..1] (mapped to [-1024,1024], resulting in an angle in range [0..180]
+int16_t surfaceArcusCosine(int16_t x) {
+	if (x < -1024) return 180;
+	if (x >  1024) return 0;
+	// >>> for x in range(-1024,1025,16): print("case {}: return {};".format(x>>4,round(180*math.acos(x/1024)/math.pi)))
+	switch (x >> 4) {
+		case -64: return 180;
+		case -63: return 170;
+		case -62: return 166;
+		case -61: return 162;
+		case -60: return 160;
+		case -59: return 157;
+		case -58: return 155;
+		case -57: return 153;
+		case -56: return 151;
+		case -55: return 149;
+		case -54: return 148;
+		case -53: return 146;
+		case -52: return 144;
+		case -51: return 143;
+		case -50: return 141;
+		case -49: return 140;
+		case -48: return 139;
+		case -47: return 137;
+		case -46: return 136;
+		case -45: return 135;
+		case -44: return 133;
+		case -43: return 132;
+		case -42: return 131;
+		case -41: return 130;
+		case -40: return 129;
+		case -39: return 128;
+		case -38: return 126;
+		case -37: return 125;
+		case -36: return 124;
+		case -35: return 123;
+		case -34: return 122;
+		case -33: return 121;
+		case -32: return 120;
+		case -31: return 119;
+		case -30: return 118;
+		case -29: return 117;
+		case -28: return 116;
+		case -27: return 115;
+		case -26: return 114;
+		case -25: return 113;
+		case -24: return 112;
+		case -23: return 111;
+		case -22: return 110;
+		case -21: return 109;
+		case -20: return 108;
+		case -19: return 107;
+		case -18: return 106;
+		case -17: return 105;
+		case -16: return 104;
+		case -15: return 104;
+		case -14: return 103;
+		case -13: return 102;
+		case -12: return 101;
+		case -11: return 100;
+		case -10: return 99;
+		case -9: return 98;
+		case -8: return 97;
+		case -7: return 96;
+		case -6: return 95;
+		case -5: return 94;
+		case -4: return 94;
+		case -3: return 93;
+		case -2: return 92;
+		case -1: return 91;
+		case 0: return 90;
+		case 1: return 89;
+		case 2: return 88;
+		case 3: return 87;
+		case 4: return 86;
+		case 5: return 86;
+		case 6: return 85;
+		case 7: return 84;
+		case 8: return 83;
+		case 9: return 82;
+		case 10: return 81;
+		case 11: return 80;
+		case 12: return 79;
+		case 13: return 78;
+		case 14: return 77;
+		case 15: return 76;
+		case 16: return 76;
+		case 17: return 75;
+		case 18: return 74;
+		case 19: return 73;
+		case 20: return 72;
+		case 21: return 71;
+		case 22: return 70;
+		case 23: return 69;
+		case 24: return 68;
+		case 25: return 67;
+		case 26: return 66;
+		case 27: return 65;
+		case 28: return 64;
+		case 29: return 63;
+		case 30: return 62;
+		case 31: return 61;
+		case 32: return 60;
+		case 33: return 59;
+		case 34: return 58;
+		case 35: return 57;
+		case 36: return 56;
+		case 37: return 55;
+		case 38: return 54;
+		case 39: return 52;
+		case 40: return 51;
+		case 41: return 50;
+		case 42: return 49;
+		case 43: return 48;
+		case 44: return 47;
+		case 45: return 45;
+		case 46: return 44;
+		case 47: return 43;
+		case 48: return 41;
+		case 49: return 40;
+		case 50: return 39;
+		case 51: return 37;
+		case 52: return 36;
+		case 53: return 34;
+		case 54: return 32;
+		case 55: return 31;
+		case 56: return 29;
+		case 57: return 27;
+		case 58: return 25;
+		case 59: return 23;
+		case 60: return 20;
+		case 61: return 18;
+		case 62: return 14;
+		case 63: return 10;
+		case 64: return 0;
+	}
+	return 0;
+}
+
 
 //------------------------------------------------------------------------------
 // surface composition functions

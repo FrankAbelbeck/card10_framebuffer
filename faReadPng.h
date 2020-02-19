@@ -33,40 +33,40 @@
 // constants: error return codes
 //------------------------------------------------------------------------------
 
-#define RET_OK                      0 ///< function returned successfully
+#define RET_FAPNG_OK                      0 ///< function returned successfully
 
-#define RET_MALLOC_IMAGE           -1 ///< allocation of image data memory failed
-#define RET_MALLOC_ALPHA           -2 ///< allocation of alpha channel memory failed
-#define RET_MALLOC_PALETTE         -3 ///< allocation of palette memory failed
-#define RET_MALLOC_SCANLINE        -4 ///< allocation of scanline buffer memory (previous row) failed
-#define RET_MALLOC_CODE            -5 ///< allocation of huffman codes memory failed
-#define RET_MALLOC_BUFFER_INFLATE  -6 ///< allocation of Huffman buffer failed
+#define RET_FAPNG_MALLOC_IMAGE           -1 ///< allocation of image data memory failed
+#define RET_FAPNG_MALLOC_ALPHA           -2 ///< allocation of alpha channel memory failed
+#define RET_FAPNG_MALLOC_PALETTE         -3 ///< allocation of palette memory failed
+#define RET_FAPNG_MALLOC_SCANLINE        -4 ///< allocation of scanline buffer memory (previous row) failed
+#define RET_FAPNG_MALLOC_CODE            -5 ///< allocation of huffman codes memory failed
+#define RET_FAPNG_MALLOC_BUFFER_INFLATE  -6 ///< allocation of Huffman buffer failed
 
-#define RET_OPEN                   -7 ///< opening file failed
-#define RET_READ                   -8 ///< reading the file failed
-#define RET_SEEK                   -9 ///< seeking in file failed (errno tells why)
+#define RET_FAPNG_OPEN                   -7 ///< opening file failed
+#define RET_FAPNG_READ                   -8 ///< reading the file failed
+#define RET_FAPNG_SEEK                   -9 ///< seeking in file failed (errno tells why)
 
-#define RET_MAGIC                 -10 ///< magic byte check failed
-#define RET_HEADER                -11 ///< header not first chunk or header invalid
-#define RET_DIMENSIONS            -12 ///< width or height not in supported range 1..255
-#define RET_BIT_DEPTH             -13 ///< invalid bit depth
-#define RET_COLOUR_TYPE           -14 ///< invalid colour type
-#define RET_COMPRESSION_METHOD    -15 ///< invalid compression method (not 0)
-#define RET_FILTER_METHOD         -16 ///< invalid filter method (not 0)
-#define RET_FILTER_TYPE           -17 ///< invalid filter type byte
-#define RET_INTERLACE_METHOD      -18 ///< invalid interlace method (neither 0 nor 1)
-#define RET_PALETTE               -19 ///< invalid palette chunk
+#define RET_FAPNG_MAGIC                 -10 ///< magic byte check failed
+#define RET_FAPNG_HEADER                -11 ///< header not first chunk or header invalid
+#define RET_FAPNG_DIMENSIONS            -12 ///< width or height not in supported range 1..255
+#define RET_FAPNG_BIT_DEPTH             -13 ///< invalid bit depth
+#define RET_FAPNG_COLOUR_TYPE           -14 ///< invalid colour type
+#define RET_FAPNG_COMPRESSION_METHOD    -15 ///< invalid compression method (not 0)
+#define RET_FAPNG_FILTER_METHOD         -16 ///< invalid filter method (not 0)
+#define RET_FAPNG_FILTER_TYPE           -17 ///< invalid filter type byte
+#define RET_FAPNG_INTERLACE_METHOD      -18 ///< invalid interlace method (neither 0 nor 1)
+#define RET_FAPNG_PALETTE               -19 ///< invalid palette chunk
 
-#define RET_DEFLATE_COMPRESSION   -20 ///< invalid DEFLATE compression type
-#define RET_PRESET_DICT           -21 ///< zlib sports preset dict (not valid in PNG)
-#define RET_ZLIB_COMPRESSION      -22 ///< invalid zlib compression type
-#define RET_ZLIB_WINSIZE          -23 ///< invalid zlib buffer window size
-#define RET_NOCOMP_LEN            -24 ///< length value mismatch in uncompressed DEFLATE block
-#define RET_INVALID_CODE_LEN_CODE -25 ///< invalid code length code 16 (at beginning, no code to copy)
-#define RET_INVALID_LENGTH_CODE   -26 ///< invalid length code (not in range 0..285)
-#define RET_INVALID_DISTANCE_CODE -27 ///< invalid distance code (not in range 0..29)
-#define RET_LENGTHS_OVERFLOW      -28 ///< too many lengths while decoding dynamic Huffman alphabet
-#define RET_CODE_NOT_FOUND        -29 ///< no code matches bit pattern at current file position
+#define RET_FAPNG_DEFLATE_COMPRESSION   -20 ///< invalid DEFLATE compression type
+#define RET_FAPNG_PRESET_DICT           -21 ///< zlib sports preset dict (not valid in PNG)
+#define RET_FAPNG_ZLIB_COMPRESSION      -22 ///< invalid zlib compression type
+#define RET_FAPNG_ZLIB_WINSIZE          -23 ///< invalid zlib buffer window size
+#define RET_FAPNG_NOCOMP_LEN            -24 ///< length value mismatch in uncompressed DEFLATE block
+#define RET_FAPNG_INVALID_CODE_LEN_CODE -25 ///< invalid code length code 16 (at beginning, no code to copy)
+#define RET_FAPNG_INVALID_LENGTH_CODE   -26 ///< invalid length code (not in range 0..285)
+#define RET_FAPNG_INVALID_DISTANCE_CODE -27 ///< invalid distance code (not in range 0..29)
+#define RET_FAPNG_LENGTHS_OVERFLOW      -28 ///< too many lengths while decoding dynamic Huffman alphabet
+#define RET_FAPNG_CODE_NOT_FOUND        -29 ///< no code matches bit pattern at current file position
 
 //------------------------------------------------------------------------------
 // various constants
@@ -388,10 +388,10 @@ RGBA5658 convertPixelRGBA16(PngData *self, uint8_t x);
  * 
  * @param self Address of a PngData structure.
  * @returns A signed byte (int8_t) with one of the following return codes:
- *     - RET_OK: successfully found next chunk of given type.
- *     - RET_READ: reading from file failed.
- *     - RET_HEADER: invalid IHDR length.
- *     - RET_PALETTE: invalid PLTE length.
+ *     - RET_FAPNG_OK: successfully found next chunk of given type.
+ *     - RET_FAPNG_READ: reading from file failed.
+ *     - RET_FAPNG_HEADER: invalid IHDR length.
+ *     - RET_FAPNG_PALETTE: invalid PLTE length.
  */
 int8_t readChunkHeader(PngData *self);
 
@@ -400,8 +400,8 @@ int8_t readChunkHeader(PngData *self);
  * @param self Address of a PngData structure.
  * @param typeChunkRequested Number of chunk type, one of the CHUNK_* consts.
  * @returns A signed byte (int8_t) with one of the following return codes:
- *     - RET_OK: successfully found next chunk of given type.
- *     - RET_SEEK: seeking next chunk failed (EOF?).
+ *     - RET_FAPNG_OK: successfully found next chunk of given type.
+ *     - RET_FAPNG_SEEK: seeking next chunk failed (EOF?).
  *     - any error reported by readChunkHeader().
  */
 int8_t seekChunk(PngData *self, uint8_t typeChunkRequested);
@@ -422,8 +422,8 @@ void skipRemainingBits(PngData *self);
  * @param buffer Address of a byte (uint8_t) array.
  * @param numBytes Number of bytes to read; uint16_t, range 0..0xffff.
  * @returns A signed byte (int8_t) with one of the following return codes:
- *     - RET_OK: all bytes successfully read.
- *     - RET_READ: reading the file failed.
+ *     - RET_FAPNG_OK: all bytes successfully read.
+ *     - RET_FAPNG_READ: reading the file failed.
  *     - any error reported by seekChunk().
  */
 int8_t readBytesIDAT(PngData *self, uint8_t *buffer, uint16_t numBytes);
@@ -436,8 +436,8 @@ int8_t readBytesIDAT(PngData *self, uint8_t *buffer, uint16_t numBytes);
  * @param self Address of a PngData structure.
  * @param numBits Number of bits to read; uint8_t, range 0..0xff.
  * @returns A signed byte (int8_t) with one of the following return codes:
- *     - RET_OK: all bytes successfully read.
- *     - RET_READ: reading the file failed.
+ *     - RET_FAPNG_OK: all bytes successfully read.
+ *     - RET_FAPNG_READ: reading the file failed.
  *     - any error reported by seekChunk().
  */
 int8_t readBitsIDAT(PngData *self, uint8_t numBits);
@@ -449,8 +449,8 @@ int8_t readBitsIDAT(PngData *self, uint8_t numBits);
  * @param lenCodes Number of codes in given alphabet.
  * @param codes Address of an array of codes (packed into uint32_ts).
  * @returns A signed byte (int8_t) with one of the following return codes:
- *     - RET_OK: all bytes successfully read.
- *     - RET_CODE_NOT_FOUND: no code matches the current bit sequence.
+ *     - RET_FAPNG_OK: all bytes successfully read.
+ *     - RET_FAPNG_CODE_NOT_FOUND: no code matches the current bit sequence.
  *     - any error reported by readBitsIDAT().
  */
 int8_t checkCode(PngData *self, uint16_t lenCodes, uint32_t *codes);
@@ -462,8 +462,8 @@ int8_t checkCode(PngData *self, uint16_t lenCodes, uint32_t *codes);
  * @param codeStruct Pointer to the address of a code array. If codeStruct is not Null, free() is called and a new struct is allocated.
  * @param sizeCodeStruct Address of a uint16_t var to hold the number of generated codes (i.e. the size of codeStruct).
  * @returns A signed byte (int8_t) with one of the following return codes:
- *     - RET_OK: all bytes successfully read.
- *     - RET_MALLOC_CODE: failed to allocate code alphabet memory.
+ *     - RET_FAPNG_OK: all bytes successfully read.
+ *     - RET_FAPNG_MALLOC_CODE: failed to allocate code alphabet memory.
  */
 int8_t generateHuffmanCodes(uint16_t numLengths, uint8_t *lengths, uint32_t **codeStruct, uint16_t *sizeCodeStruct);
 
@@ -473,19 +473,19 @@ int8_t generateHuffmanCodes(uint16_t numLengths, uint8_t *lengths, uint32_t **co
  * @param self Address of a PngData structure.
  * @param numBytes Number of bytes to read/decode.
  * @returns A signed byte (int8_t) with one of the following return codes:
- *     - RET_OK: all bytes successfully read.
- *     - RET_MALLOC_IMAGE: invalid Surface pointer passed.
- *     - RET_ZLIB_COMPRESSION: invalid zlib compression method.
- *     - RET_ZLIB_WINSIZE: invalid zlib decode window size.
- *     - RET_PRESET_DICT: zlib stream features preset dictionary (shall not appear in PNG).
- *     - RET_DEFLATE_COMPRESSION: invalid DEFLATE compression type.
- *     - RET_MALLOC_BUFFER_INFLATE: failed to allocate decode window memory.
- *     - RET_MALLOC_CODE: failed to allocate code alphabet memory.
- *     - RET_INVALID_CODE_LEN_CODE: encountered code length code 16 at beginning of block.
- *     - RET_LENGTHS_OVERFLOW: created more lengths from codes length codes than announced.
- *     - RET_INVALID_LENGTH_CODE: encountered invalid length code (most unlikely!).
- *     - RET_INVALID_DISTANCE_CODE: encountered invalid length code (most unlikely!).
- *     - RET_NOCOMP_LEN: LEN and NLEN data mismatch in uncompressed DEFLATE block.
+ *     - RET_FAPNG_OK: all bytes successfully read.
+ *     - RET_FAPNG_MALLOC_IMAGE: invalid Surface pointer passed.
+ *     - RET_FAPNG_ZLIB_COMPRESSION: invalid zlib compression method.
+ *     - RET_FAPNG_ZLIB_WINSIZE: invalid zlib decode window size.
+ *     - RET_FAPNG_PRESET_DICT: zlib stream features preset dictionary (shall not appear in PNG).
+ *     - RET_FAPNG_DEFLATE_COMPRESSION: invalid DEFLATE compression type.
+ *     - RET_FAPNG_MALLOC_BUFFER_INFLATE: failed to allocate decode window memory.
+ *     - RET_FAPNG_MALLOC_CODE: failed to allocate code alphabet memory.
+ *     - RET_FAPNG_INVALID_CODE_LEN_CODE: encountered code length code 16 at beginning of block.
+ *     - RET_FAPNG_LENGTHS_OVERFLOW: created more lengths from codes length codes than announced.
+ *     - RET_FAPNG_INVALID_LENGTH_CODE: encountered invalid length code (most unlikely!).
+ *     - RET_FAPNG_INVALID_DISTANCE_CODE: encountered invalid length code (most unlikely!).
+ *     - RET_FAPNG_NOCOMP_LEN: LEN and NLEN data mismatch in uncompressed DEFLATE block.
  *     - any error reported by seekChunk().
  *     - any error reported by readBytesIDAT().
  *     - any error reported by readBitsIDAT().
@@ -513,21 +513,21 @@ uint16_t PaethPredictor(uint16_t a, uint16_t b, uint16_t c);
  * @param filename Address of a filename string (char array).
  * @param image Address of an Image structure. Any allocated image memory will be freed and rewritten.
  * @returns A signed byte (int8_t) with one of the following return codes:
- *     - RET_OK: all bytes successfully read.
- *     - RET_OPEN: failed opening given file.
- *     - RET_READ: failed reading from file.
- *     - RET_MAGIC: first eight bytes don't match the PNG magic bytes.
- *     - RET_RET_HEADER: first chunk in file is not the IHDR chunk.
- *     - RET_DIMENSIONS: invalid image dimensions.
- *     - RET_COMPRESSION_METHOD: invalid PNG compression method.
- *     - RET_FILTER_METHOD: invalid PNG filter method.
- *     - RET_INTERLACE_METHOD: invalid PNG interlace method.
- *     - RET_BIT_DEPTH: invalid bit depth value or invalid combination of bit depth and colour type.
- *     - RET_MALLOC_PALETTE: failed to allocate palette memory.
- *     - RET_COLOUR_TYPE: invalid colour type value.
- *     - RET_MALLOC_IMAGE: failed allocating image memory.
- *     - RET_MALLOC_SCANLINE: failed allocating scanline buffer memory.
- *     - RET_FILTER_TYPE: invalid filter type value.
+ *     - RET_FAPNG_OK: all bytes successfully read.
+ *     - RET_FAPNG_OPEN: failed opening given file.
+ *     - RET_FAPNG_READ: failed reading from file.
+ *     - RET_FAPNG_MAGIC: first eight bytes don't match the PNG magic bytes.
+ *     - RET_FAPNG_RET_FAPNG_HEADER: first chunk in file is not the IHDR chunk.
+ *     - RET_FAPNG_DIMENSIONS: invalid image dimensions.
+ *     - RET_FAPNG_COMPRESSION_METHOD: invalid PNG compression method.
+ *     - RET_FAPNG_FILTER_METHOD: invalid PNG filter method.
+ *     - RET_FAPNG_INTERLACE_METHOD: invalid PNG interlace method.
+ *     - RET_FAPNG_BIT_DEPTH: invalid bit depth value or invalid combination of bit depth and colour type.
+ *     - RET_FAPNG_MALLOC_PALETTE: failed to allocate palette memory.
+ *     - RET_FAPNG_COLOUR_TYPE: invalid colour type value.
+ *     - RET_FAPNG_MALLOC_IMAGE: failed allocating image memory.
+ *     - RET_FAPNG_MALLOC_SCANLINE: failed allocating scanline buffer memory.
+ *     - RET_FAPNG_FILTER_TYPE: invalid filter type value.
  *     - any error reported by readChunkHeader().
  *     - any error reported by seekChunk().
  *     - any error reported by readScanline().

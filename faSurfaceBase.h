@@ -49,7 +49,7 @@
 #define GETRED(x)       ( (uint8_t)( ( (x) >> 11 ) & 0x1f ) )
 #define GETGREEN(x)     ( (uint8_t)( ( (x) >> 5 )  & 0x3f ) )
 #define GETBLUE(x)      ( (uint8_t)(   (x)         & 0x1f ) )
-#define MKRGB565(r,g,b) ( (uint16_t)( ((r) & 0x1f) << 11 | ((g) & 0x3f) << 5 | ((b) & 0x1f) ) )
+#define MKRGB565(r,g,b) ( (uint16_t)( (((r) >> 3) & 0x1f) << 11 | (((g) >> 2) & 0x3f) << 5 | (((b) >> 3) & 0x1f) ) )
 
 //------------------------------------------------------------------------------
 // data structures
@@ -327,21 +327,28 @@ BoundingBox surfaceDrawRectangle(Surface *surface, Point p0, Point p1, uint16_t 
  */
 int16_t surfaceTangent45(int16_t x) ;
 
-/** Calculate the sine for x in range [0..360].
+/** Calculate the sine for x in range [0,360[.
  * 
- * @param x Integer value as degrees in range [0..360].
+ * @param x Integer value as degrees in range [0,360[.
  * @returns Integer result of sin(x) normalised to range [-1024,+1024]; 0 if x outside range.
  */
 int16_t surfaceSine(int16_t x) ;
 
-/** Calculate the cosine for x in range [0..360].
+/** Calculate the cosine for x in range [0,360[.
  * 
- * @param x Integer value as degrees in range [0..360].
+ * @param x Integer value as degrees in range [0,360[.
  * @returns Integer result of cos(x) normalised to range [-1024,+1024]; 0 if x outside range.
  */
 int16_t surfaceCosine(int16_t x) ;
 
-/** Image composition function for alpha blending a pixel with another pixel.
+/** Calculate the arcus cosine for x in range [-1024,1024].
+ * 
+ * @param x Integer value in range [-1024,1024] (i.e. [-1,1], multiplied by 1024).
+ * @returns Integer result of acos(x) in degress [0,180].
+ */
+int16_t surfaceArcusCosine(int16_t x);
+
+	/** Image composition function for alpha blending a pixel with another pixel.
  * 
  * This function calculates "A op B", with "op" depending of the given mode.
  * Details can be found in:

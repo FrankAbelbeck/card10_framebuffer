@@ -234,11 +234,11 @@ RGBA5658 convertPixelRGBA16(PngData *self, uint8_t x) {
 int8_t readChunkHeader(PngData *self) {
 	// read length (32 Bit Big Endian)
 	uint8_t buffer32[4];
-	if (epic_file_read(self->file,&buffer32,4) != 4) return RET_READ;
+	if (epic_file_read(self->file,&buffer32,4) != 4) return RET_FAPNG_READ;
 	self->lenChunk = (uint32_t)BIGENDIAN32(buffer32);
 	
 	// read and parse type string (4 chars)
-	if (epic_file_read(self->file,&buffer32,4) != 4) return RET_READ;
+	if (epic_file_read(self->file,&buffer32,4) != 4) return RET_FAPNG_READ;
 	// primitive prefix tree instead of using strncmp()
 	self->typeChunk = CHUNK_UNKNOWN;
 	switch (buffer32[0]) {
@@ -250,7 +250,7 @@ int8_t readChunkHeader(PngData *self) {
 					if (buffer32[2] == 68 && buffer32[3] == 82) {
 						// IHDR
 						self->typeChunk = CHUNK_IHDR;
-						if (self->lenChunk != 13) return RET_HEADER;
+						if (self->lenChunk != 13) return RET_FAPNG_HEADER;
 					}
 					break;
 				case 68:
@@ -274,22 +274,22 @@ int8_t readChunkHeader(PngData *self) {
 			if (buffer32[1] == 76 && buffer32[2] == 84 && buffer32[3] == 69) {
 				// PLTE: contains 1..256 palette entries, each 3 bytes (RGB) wide
 				self->typeChunk = CHUNK_PLTE;
-				if (self->lenChunk < 3 || self->lenChunk > 768 || self->lenChunk % 3 != 0) return RET_PALETTE;
+				if (self->lenChunk < 3 || self->lenChunk > 768 || self->lenChunk % 3 != 0) return RET_FAPNG_PALETTE;
 			}
 			break;
 	};
-	return RET_OK;
+	return RET_FAPNG_OK;
 }
 
 // skip bytes until the given chunk type is encountered
 int8_t seekChunk(PngData *self, uint8_t typeChunkRequested) {
 	int8_t retval;
 	do {
-		if (epic_file_seek(self->file,self->lenChunk+4,SEEK_CUR) != 0) return RET_SEEK;
+		if (epic_file_seek(self->file,self->lenChunk+4,SEEK_CUR) != 0) return RET_FAPNG_SEEK;
 		retval = readChunkHeader(self);
-		if (retval != RET_OK) return retval;
+		if (retval != RET_FAPNG_OK) return retval;
 	} while (self->typeChunk != typeChunkRequested);
-	return RET_OK;
+	return RET_FAPNG_OK;
 }
 
 //------------------------------------------------------------------------------
@@ -311,23 +311,23 @@ int8_t readBytesIDAT(PngData *self, uint8_t *buffer, uint16_t numBytes) {
 		if (self->lenChunk < numBytesRemaining) {
 			// chunk holds fewer bytes than needed:
 			// read only lenChunk bytes, update bytes counters and seek new IDAT chunk
-			if (epic_file_read(self->file,&buffer[numBytesRead],self->lenChunk) != self->lenChunk) return RET_READ;
+			if (epic_file_read(self->file,&buffer[numBytesRead],self->lenChunk) != self->lenChunk) return RET_FAPNG_READ;
 			numBytesRemaining -= self->lenChunk;
 			numBytesRead += self->lenChunk;
 			self->lenChunk = 0;
 			retval = seekChunk(self,CHUNK_IDAT);
-			if (retval != RET_OK) return retval;
+			if (retval != RET_FAPNG_OK) return retval;
 		} else {
 			// chunk holds enough bytes to satisfy request:
 			// read request number of bytes and 
-			if (epic_file_read(self->file,&buffer[numBytesRead],numBytesRemaining) != numBytesRemaining) return RET_READ;
+			if (epic_file_read(self->file,&buffer[numBytesRead],numBytesRemaining) != numBytesRemaining) return RET_FAPNG_READ;
 			numBytesRead += numBytesRemaining;
 			self->lenChunk -= numBytesRemaining;
 			numBytesRemaining = 0;
 		}
 	} while (numBytesRead < numBytes);
 	skipRemainingBits(self);
-	return RET_OK;
+	return RET_FAPNG_OK;
 }
 
 // read numBits bits from self->file
@@ -344,7 +344,7 @@ int8_t readBitsIDAT(PngData *self, uint8_t numBits) {
 			self->valueBufferBits = self->bufferBits & ((1 << numBits)-1);
 			self->bufferBits >>= numBits;
 			self->bitsRemaining -= numBits;
-			return RET_OK;
+			return RET_FAPNG_OK;
 		}
 		else {
 			// consume all remaining bits
@@ -360,7 +360,7 @@ int8_t readBitsIDAT(PngData *self, uint8_t numBits) {
 	// read as many whole bytes as necessary
 	while (numBits > 8) {
 		if (self->lenChunk > 0) {
-			if (epic_file_read(self->file,&self->bufferBits,1) != 1) return RET_READ;
+			if (epic_file_read(self->file,&self->bufferBits,1) != 1) return RET_FAPNG_READ;
 			self->lenChunk--;
 			self->valueBufferBits |= self->bufferBits << bitsRead;
 			bitsRead += 8;
@@ -368,7 +368,7 @@ int8_t readBitsIDAT(PngData *self, uint8_t numBits) {
 		} else {
 			// seek next chunk for more bytes
 			retval = seekChunk(self,CHUNK_IDAT);
-			if (retval != RET_OK) return retval;
+			if (retval != RET_FAPNG_OK) return retval;
 		}
 	}
 	
@@ -377,15 +377,15 @@ int8_t readBitsIDAT(PngData *self, uint8_t numBits) {
 		if (self->lenChunk == 0) {
 			// seek next chunk for more bytes
 			retval = seekChunk(self,CHUNK_IDAT);
-			if (retval != RET_OK) return retval;
+			if (retval != RET_FAPNG_OK) return retval;
 		}
-		if (epic_file_read(self->file,&self->bufferBits,1) != 1) return RET_READ;
+		if (epic_file_read(self->file,&self->bufferBits,1) != 1) return RET_FAPNG_READ;
 		self->lenChunk--;
 		self->bitsRemaining = 8 - numBits;
 		self->valueBufferBits |= (self->bufferBits & ((1 << numBits)-1)) << bitsRead;
 		self->bufferBits >>= numBits;
 	}
-	return RET_OK;
+	return RET_FAPNG_OK;
 }
 
 int8_t checkCode(PngData *self, uint16_t lenCodes, uint32_t *codes) {
@@ -401,7 +401,7 @@ int8_t checkCode(PngData *self, uint16_t lenCodes, uint32_t *codes) {
 		lenCode = EXTRACTLENGTH(codes[i]);
 		if (lenCode > lenCodeCurrent) {
 			retval = readBitsIDAT(self,lenCode - lenCodeCurrent);
-			if (retval != RET_OK) return retval;
+			if (retval != RET_FAPNG_OK) return retval;
 			valueCode |= self->valueBufferBits << bitsRead;
 			bitsRead += lenCode - lenCodeCurrent;
 			lenCodeCurrent = lenCode;
@@ -409,11 +409,11 @@ int8_t checkCode(PngData *self, uint16_t lenCodes, uint32_t *codes) {
 		// check if extracted bit value matches code value; if so, set symbol and exit
 		if (EXTRACTBITS(codes[i]) == valueCode) {
 			self->valueBufferBits = EXTRACTSYMBOL(codes[i]);
-			return RET_OK;
+			return RET_FAPNG_OK;
 		}
 	}
 	// fell through: no code matches bit pattern at current file position: error
-	return RET_CODE_NOT_FOUND;
+	return RET_FAPNG_CODE_NOT_FOUND;
 }
 
 
@@ -434,7 +434,7 @@ int8_t generateHuffmanCodes(uint16_t numLengths, uint8_t *lengths, uint32_t **co
 	uint32_t *codes;
 	
 	codes = (uint32_t*)malloc(numLengths*sizeof(uint32_t));
-	if (codes == NULL) return RET_MALLOC_CODE;
+	if (codes == NULL) return RET_FAPNG_MALLOC_CODE;
 	for (i=0;i<numLengths;i++) codes[i] = 0xffffffff; // pre-set unused codes with highest value (sorting shifts them down)
 	
 	// algorithm: ref. to RFC 1951, 3.2.2 
@@ -502,10 +502,10 @@ int8_t generateHuffmanCodes(uint16_t numLengths, uint8_t *lengths, uint32_t **co
 	// create codeStruct, copy defined codes and adjust size var (free old one if not NULL)
 	if (*codeStruct != NULL) free(*codeStruct);
 	*codeStruct = (uint32_t*)malloc(*sizeCodeStruct*sizeof(uint32_t));
-	if (*codeStruct == NULL) return RET_MALLOC_CODE;
+	if (*codeStruct == NULL) return RET_FAPNG_MALLOC_CODE;
 	for (i=0;i<*sizeCodeStruct;i++) (*codeStruct)[i] = codes[i];
 	free(codes);
-	return RET_OK;
+	return RET_FAPNG_OK;
 }
 
 // read numBytes from self->file into self->scanlineCurrent, decoding zlib/DEFLATE data on the fly
@@ -514,7 +514,7 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 	// before we begin: seek next IDAT chunk if not yet inside an IDAT chunk
 	if (self->typeChunk != CHUNK_IDAT) {
 		retval = seekChunk(self,CHUNK_IDAT);
-		if (retval != RET_OK) return retval;
+		if (retval != RET_FAPNG_OK) return retval;
 	}
 	// read n_bytes into self->scanlineCurrent
 	// if chunk end is reached, seek next IDAT chunk or fail
@@ -542,15 +542,15 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 				// start of first IDAT chunk = start of zlib stream (RFC 1950, 2.2)
 				// read two bytes CMF and FLG
 				retval = readBytesIDAT(self,buffer32,2);
-				if (retval != RET_OK) return retval;
+				if (retval != RET_FAPNG_OK) return retval;
 				// check CM and CINFO
-				if ((buffer32[0] & 0x0f) != 8) return RET_ZLIB_COMPRESSION;
+				if ((buffer32[0] & 0x0f) != 8) return RET_FAPNG_ZLIB_COMPRESSION;
 				self->sizeWindow = buffer32[0] >> 4;
-				if (self->sizeWindow > 7) return RET_ZLIB_WINSIZE;
+				if (self->sizeWindow > 7) return RET_FAPNG_ZLIB_WINSIZE;
 				self->sizeWindow = 1 << (self->sizeWindow + 8);
 				
 				// check FLG; bit 5 should not be set (no preset dictionary!)
-				if ((buffer32[1] & 0x20) == 0x20) return RET_PRESET_DICT;
+				if ((buffer32[1] & 0x20) == 0x20) return RET_FAPNG_PRESET_DICT;
 				
 				// what follows is compressed data according to RFC 1951
 				self->state = STATE_DEFL_BEGIN;
@@ -561,14 +561,14 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 				// signal error if not enough data could be read
 				// otherwise skip zlib's ADLER32 checksum and exit
 				retval = readBytesIDAT(self,buffer32,4);
-				if (retval != RET_OK) return retval;
+				if (retval != RET_FAPNG_OK) return retval;
 				free(self->bufferInflate);
 				self->state = STATE_EXIT;
-				return RET_OK;
+				return RET_FAPNG_OK;
 				
 			case STATE_DEFL_BEGIN:
 				retval = readBitsIDAT(self,3);
-				if (retval != RET_OK) return retval;
+				if (retval != RET_FAPNG_OK) return retval;
 				if ((self->valueBufferBits & 0x01) == 0x01) self->isLastBlock = true;
 				switch ((self->valueBufferBits & 0x06) >> 1) {
 					case DEFL_NO_COMPRESSION:
@@ -582,7 +582,7 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 						self->state = STATE_DEFL_DYN_HUFFMAN;
 						break;
 					default:
-						return RET_DEFLATE_COMPRESSION;
+						return RET_FAPNG_DEFLATE_COMPRESSION;
 				}
 				break;
 			
@@ -596,29 +596,29 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 			
 			case STATE_DEFL_STAT_HUFFMAN:
 				// allocate zlib buffer
-				if (self->sizeWindow == 0) return RET_ZLIB_WINSIZE;
+				if (self->sizeWindow == 0) return RET_FAPNG_ZLIB_WINSIZE;
 				self->bufferInflate = (uint8_t*)malloc(self->sizeWindow);
-				if (self->bufferInflate == NULL) return RET_MALLOC_BUFFER_INFLATE;
+				if (self->bufferInflate == NULL) return RET_FAPNG_MALLOC_BUFFER_INFLATE;
 				self->indexBufferInflate = 0;
 				self->indexReading = 0;
 				// calculate static huffman code alphabets
 				// create huffman code structure using the bit lengths defined in RFC 1951, 3.2.6
 				lengths = (uint8_t*)malloc(288);
-				if (lengths == NULL) return RET_MALLOC_CODE;
+				if (lengths == NULL) return RET_FAPNG_MALLOC_CODE;
 				for (i=0; i<=143; i++) lengths[i] = 8;
 				for (i=144; i<=255; i++) lengths[i] = 9;
 				for (i=256; i<=279; i++) lengths[i] = 7;
 				for (i=280; i<=287; i++) lengths[i] = 8;
 				
 				retval = generateHuffmanCodes(288,lengths,&self->codesHuffmanLength,&self->sizeCodesHuffmanLength);
-				if (retval != RET_OK) return retval;
+				if (retval != RET_FAPNG_OK) return retval;
 				free(lengths);
 				
 				lengths = (uint8_t*)malloc(32);
-				if (lengths == NULL) return RET_MALLOC_CODE;
+				if (lengths == NULL) return RET_FAPNG_MALLOC_CODE;
 				for (i=0; i<32; i++) lengths[i] = 5;
 				retval = generateHuffmanCodes(32,lengths,&self->codesHuffmanDistance,&self->sizeCodesHuffmanDistance);
-				if (retval != RET_OK) return retval;
+				if (retval != RET_FAPNG_OK) return retval;
 				free(lengths);
 				
 				// start decoding
@@ -630,9 +630,9 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 			
 			case STATE_DEFL_DYN_HUFFMAN:
 				// allocate zlib buffer
-				if (self->sizeWindow == 0) return RET_ZLIB_WINSIZE;
+				if (self->sizeWindow == 0) return RET_FAPNG_ZLIB_WINSIZE;
 				self->bufferInflate = (uint8_t*)malloc(self->sizeWindow);
-				if (self->bufferInflate == NULL) return RET_MALLOC_BUFFER_INFLATE;
+				if (self->bufferInflate == NULL) return RET_FAPNG_MALLOC_BUFFER_INFLATE;
 				self->indexBufferInflate = 0;
 				self->indexReading = 0;
 				// extract huffman code alphabets from block
@@ -641,20 +641,20 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 				//  - read 5 bits HDIST = number of dist codes - 1
 				//  - read 4 bits HCLEN = number of code length codes - 4
 				retval = readBitsIDAT(self,5);
-				if (retval != RET_OK) return retval;
+				if (retval != RET_FAPNG_OK) return retval;
 				uint16_t numLit = self->valueBufferBits + 257;
 				retval = readBitsIDAT(self,5);
-				if (retval != RET_OK) return retval;
+				if (retval != RET_FAPNG_OK) return retval;
 				uint8_t numDist = self->valueBufferBits + 1;
 				retval = readBitsIDAT(self,4);
-				if (retval != RET_OK) return retval;
+				if (retval != RET_FAPNG_OK) return retval;
 				uint8_t numCodeLen = self->valueBufferBits + 4;
 				// read code length code lengths
 				lengths = (uint8_t*)calloc(19,1);
-				if (lengths == NULL) return RET_MALLOC_CODE;
+				if (lengths == NULL) return RET_FAPNG_MALLOC_CODE;
 				for (i=0; i< numCodeLen; i++) {
 					retval = readBitsIDAT(self,3);
-					if (retval != RET_OK) return retval;
+					if (retval != RET_FAPNG_OK) return retval;
 					switch (i) {
 						case 0:
 							lengths[16] = self->valueBufferBits;
@@ -714,55 +714,55 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 							lengths[15] = self->valueBufferBits;
 							break;
 					}
-					if (retval != RET_OK) return retval;
+					if (retval != RET_FAPNG_OK) return retval;
 				}
 				// build alphabet from code length code lengths
 				retval = generateHuffmanCodes(19,lengths,&self->codesHuffmanLength,&self->sizeCodesHuffmanLength);
-				if (retval != RET_OK) return retval;
+				if (retval != RET_FAPNG_OK) return retval;
 				free(lengths);
 				// decode combined lengths for lit/len and distance alphabets
 				// using the codes in codesHuffmanLength
 				lengths = (uint8_t*)calloc(numLit+numDist,1);
-				if (lengths == NULL) return RET_MALLOC_CODE;
+				if (lengths == NULL) return RET_FAPNG_MALLOC_CODE;
 				i = 0;
 				while (i < numLit+numDist) {
 					retval = checkCode(self,19,self->codesHuffmanLength);
-					if (retval != RET_OK) return retval;
+					if (retval != RET_FAPNG_OK) return retval;
 					if (self->valueBufferBits < 16) {
 						// code 0..15: just add this value as length
 						lengths[i] = (uint8_t)self->valueBufferBits;
 						i++;
 					} else if (self->valueBufferBits == 16) {
 						// code 16: copy previous lengths x times; x = next 2 bits + 3
-						if (i == 0) return RET_INVALID_CODE_LEN_CODE;
+						if (i == 0) return RET_FAPNG_INVALID_CODE_LEN_CODE;
 						retval = readBitsIDAT(self,2);
-						if (retval != RET_OK) return retval;
+						if (retval != RET_FAPNG_OK) return retval;
 						for (self->valueBufferBits += 3; self->valueBufferBits > 0; self->valueBufferBits--) {
 							lengths[i] = lengths[i-1];
 							i++;
-							if (i > numLit+numDist) return RET_LENGTHS_OVERFLOW;
+							if (i > numLit+numDist) return RET_FAPNG_LENGTHS_OVERFLOW;
 						}
 					} else if (self->valueBufferBits == 17) {
 						// code 17: repeat length 0, x times; x = next 3 bits + 3
 						// since lengths is initialised with zeros, just skip the next x lengths
 						retval = readBitsIDAT(self,3);
-						if (retval != RET_OK) return retval;
+						if (retval != RET_FAPNG_OK) return retval;
 						i += self->valueBufferBits + 3;
-						if (i > numLit+numDist) return RET_LENGTHS_OVERFLOW;
+						if (i > numLit+numDist) return RET_FAPNG_LENGTHS_OVERFLOW;
 					} else if (self->valueBufferBits == 18) {
 						// code 18: repeat length 0, x times; x = next 7 bits + 11
 						// since lengths is initialised with zeros, just skip the next x lengths
 						retval = readBitsIDAT(self,7);
-						if (retval != RET_OK) return retval;
+						if (retval != RET_FAPNG_OK) return retval;
 						i += self->valueBufferBits + 11;
-						if (i > numLit+numDist) return RET_LENGTHS_OVERFLOW;
+						if (i > numLit+numDist) return RET_FAPNG_LENGTHS_OVERFLOW;
 					}
 				}
 				// all lengths fields are now set up: build code alphabets, de-allocate lengths memory
 				retval = generateHuffmanCodes(numLit,lengths,&self->codesHuffmanLength,&self->sizeCodesHuffmanLength);
-				if (retval != RET_OK) return retval;
+				if (retval != RET_FAPNG_OK) return retval;
 				retval = generateHuffmanCodes(numDist,&lengths[numLit],&self->codesHuffmanDistance,&self->sizeCodesHuffmanDistance);
-				if (retval != RET_OK) return retval;
+				if (retval != RET_FAPNG_OK) return retval;
 				free(lengths);
 				
 				// head on to huffman decoding
@@ -783,12 +783,12 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 						self->scanlineCurrent[numBytes-numBytesToRead] = self->bufferInflate[self->indexReading];
 						self->indexReading = (self->indexReading + 1) & (self->sizeWindow-1);
 						numBytesToRead--;
-						if (numBytesToRead == 0) return RET_OK;
+						if (numBytesToRead == 0) return RET_FAPNG_OK;
 					}
 					
 					// retrieve length symbol
 					retval = checkCode(self,self->sizeCodesHuffmanLength,self->codesHuffmanLength);
-					if (retval != RET_OK) return retval;
+					if (retval != RET_FAPNG_OK) return retval;
 					if  (self->valueBufferBits < 256) {
 						// literal symbol found: just append symbol to buffer
 						// wrap around index if reaching end of buffer (ring buffer)
@@ -821,15 +821,15 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 							extraBits = length / 4;
 							length = (1<<(extraBits+2)) + 3 + (length & 3)*(1<<(extraBits));
 							retval = readBitsIDAT(self,extraBits);
-							if (retval != RET_OK) return retval;
+							if (retval != RET_FAPNG_OK) return retval;
 							length += self->valueBufferBits;
 						} else if (length == 285) {
 							length = 258;
-						} else return RET_INVALID_LENGTH_CODE;
+						} else return RET_FAPNG_INVALID_LENGTH_CODE;
 						
 						// step 2: decode distance
 						retval = checkCode(self,self->sizeCodesHuffmanDistance,self->codesHuffmanDistance);
-						if (retval != RET_OK) return retval;
+						if (retval != RET_FAPNG_OK) return retval;
 						distance = self->valueBufferBits;
 						if (distance < 4) {
 							// first four codes + 1 => distance
@@ -857,9 +857,9 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 							extraBits = distance / 2;
 							distance = (1<<(extraBits+1)) + 1 + (distance & 1)*(1<<extraBits);
 							retval = readBitsIDAT(self,extraBits);
-							if (retval != RET_OK) return retval;
+							if (retval != RET_FAPNG_OK) return retval;
 							distance += self->valueBufferBits;
-						} else return RET_INVALID_DISTANCE_CODE;
+						} else return RET_FAPNG_INVALID_DISTANCE_CODE;
 						
 						// step 3: go back distance and copy length bytes to buffer front
 						// since it's a ring buffer, check crossing lower boundary (index==0)
@@ -883,13 +883,13 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 			
 			case STATE_DEFL_NO_COMPRESSION:
 				retval = readBytesIDAT(self,buffer32,4);
-				if (retval != RET_OK) return retval;
+				if (retval != RET_FAPNG_OK) return retval;
 				
 				// buffer holds LEN and NLEN (1s complement of LEN) in little endian order
 				// calculate values and compare 1s complement
 				// if lengths fit, head on to reading uncompressed bytes
 				self->sizeWindow = LITTLEENDIAN16(buffer32);
-				if (self->sizeWindow != (uint16_t)~LITTLEENDIAN16(&buffer32[2])) return RET_NOCOMP_LEN;
+				if (self->sizeWindow != (uint16_t)~LITTLEENDIAN16(&buffer32[2])) return RET_FAPNG_NOCOMP_LEN;
 				self->state = STATE_DEFL_NO_COMPRESSION_READ;
 				break;
 			
@@ -899,16 +899,16 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 					// requested number of bytes fits into
 					// currently available number of uncompressed bytes 
 					retval = readBytesIDAT(self,&self->scanlineCurrent[numBytes - numBytesToRead],numBytesToRead);
-					if (retval != RET_OK) return retval;
+					if (retval != RET_FAPNG_OK) return retval;
 					self->sizeWindow -= numBytesToRead;
 					numBytesToRead = 0;
-					return RET_OK;
+					return RET_FAPNG_OK;
 				} else {
 					// read as many bytes as possible and terminate block
 					// it should follow another block with the remaining bytes
 					// see state STATE_DEFL_END --> STATE_DEFL_BEGIN
 					retval = readBytesIDAT(self,&self->scanlineCurrent[numBytes - numBytesToRead],self->sizeWindow);
-					if (retval != RET_OK) return retval;
+					if (retval != RET_FAPNG_OK) return retval;
 					numBytesToRead -= self->sizeWindow;
 					self->sizeWindow = 0;
 					self->state = STATE_DEFL_END;
@@ -916,7 +916,7 @@ int8_t readScanline(PngData *self, uint16_t numBytes) {
 				break;
 		}
 	}
-	return RET_OK;
+	return RET_FAPNG_OK;
 }
 
 //------------------------------------------------------------------------------
@@ -936,7 +936,7 @@ uint16_t PaethPredictor(uint16_t a, uint16_t b, uint16_t c) {
 
 // central PNG reading function
 int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
-	if (image == NULL) return RET_MALLOC_IMAGE;
+	if (image == NULL) return RET_FAPNG_MALLOC_IMAGE;
 	
 	// local vars
 	int8_t   retval;
@@ -944,34 +944,34 @@ int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
 	
 	// open file
 	self->file = epic_file_open(filename,"rb");
-	if (self->file < 0) return RET_OPEN;
+	if (self->file < 0) return RET_FAPNG_OPEN;
 	
 	// read and check first eight magic bytes
 	// should be 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
- 	if (epic_file_read(self->file,magicBytes,8) != 8) return RET_READ;
+ 	if (epic_file_read(self->file,magicBytes,8) != 8) return RET_FAPNG_READ;
 	if (magicBytes[0] != 0x89 || magicBytes[1] != 0x50 || \
 		magicBytes[2] != 0x4e || magicBytes[3] != 0x47 || \
 		magicBytes[4] != 0x0d || magicBytes[5] != 0x0a || \
-		magicBytes[6] != 0x1a || magicBytes[7] != 0x0a) return RET_MAGIC;
+		magicBytes[6] != 0x1a || magicBytes[7] != 0x0a) return RET_FAPNG_MAGIC;
 	
 	// read first chunk; has to be IHDR, otherwise PNG file is flawed
 	retval = readChunkHeader(self);
-	if (retval != RET_OK) return retval;
-	if (self->typeChunk != CHUNK_IHDR) return RET_HEADER;
+	if (retval != RET_FAPNG_OK) return retval;
+	if (self->typeChunk != CHUNK_IHDR) return RET_FAPNG_HEADER;
 	
 	// parse header:
 	//  - first reading pass: 4 byte width, 4 byte height,
 	//  - second reading pass: 1 byte each for bit depth, colour type, compression method, filter method, interlace method
-	if (epic_file_read(self->file,magicBytes,8) != 8) return RET_READ;
+	if (epic_file_read(self->file,magicBytes,8) != 8) return RET_FAPNG_READ;
 	self->lenChunk -= 8;
 	uint32_t tmp = (uint32_t)BIGENDIAN32(&magicBytes[0]);
-	if (tmp == 0 || tmp > 255) return RET_DIMENSIONS;
+	if (tmp == 0 || tmp > 255) return RET_FAPNG_DIMENSIONS;
 	image->width = (uint8_t)tmp;
 	tmp = (uint32_t)BIGENDIAN32(&magicBytes[4]);
-	if (tmp == 0 || tmp > 255) return RET_DIMENSIONS;
+	if (tmp == 0 || tmp > 255) return RET_FAPNG_DIMENSIONS;
 	image->height = (uint8_t)tmp;
 	
-	if (epic_file_read(self->file,magicBytes,5) != 5) return RET_READ;
+	if (epic_file_read(self->file,magicBytes,5) != 5) return RET_FAPNG_READ;
 	self->lenChunk -= 5;
 	
 	// magicBytes[0] = bit depth (1,2,4,8,16)
@@ -979,9 +979,9 @@ int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
 	// magicBytes[2] = compression method, must be 0
 	// magicBytes[3] = filter method, must be 0
 	// magicBytes[4] = interlace method, either 0=none or 1=Adam7
-	if (magicBytes[2]) return RET_COMPRESSION_METHOD;
-	if (magicBytes[3]) return RET_FILTER_METHOD;
-	if (magicBytes[4] > 1) return RET_INTERLACE_METHOD;
+	if (magicBytes[2]) return RET_FAPNG_COMPRESSION_METHOD;
+	if (magicBytes[3]) return RET_FAPNG_FILTER_METHOD;
+	if (magicBytes[4] > 1) return RET_FAPNG_INTERLACE_METHOD;
 	uint8_t bitDepth = magicBytes[0];
 	uint8_t pass = magicBytes[4];
 	uint8_t bytesPerPixel;
@@ -1010,7 +1010,7 @@ int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
 					self->funPixConv = convertPixelGrey16;
 					break;
 				default:
-					return RET_BIT_DEPTH;
+					return RET_FAPNG_BIT_DEPTH;
 			}
 			break;
 		case COLOURTYPE__RGB:
@@ -1025,7 +1025,7 @@ int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
 					bytesPerPixel = 6;
 					break;
 				default:
-					return RET_BIT_DEPTH;
+					return RET_FAPNG_BIT_DEPTH;
 			}
 			break;
 		case COLOURTYPE__INDEXED:
@@ -1045,19 +1045,19 @@ int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
 					self->funPixConv = convertPixelIndexed8;
 					break;
 				default:
-					return RET_BIT_DEPTH;
+					return RET_FAPNG_BIT_DEPTH;
 			}
 			// look for PLTE chunk; has to appear before first IDAT chunk
 			retval = seekChunk(self,CHUNK_PLTE);
-			if (retval != RET_OK) return retval;
+			if (retval != RET_FAPNG_OK) return retval;
 			// note: seekChunk/readChunkHeader have already ensured correct PLTE length
 			self->sizePalette = (uint8_t)((self->lenChunk / 3) - 1); // min 1, max 256, fitting into one byte (0..255)
 			self->palette = (uint16_t*)malloc(sizeof(uint16_t) * self->sizePalette + 2); // +2: account for normalised size
-			if (self->palette == NULL) return RET_MALLOC_PALETTE;
+			if (self->palette == NULL) return RET_FAPNG_MALLOC_PALETTE;
 			for (k=0; k <= self->sizePalette; k++) {
 				// read palette entries from chunk; the checks above ensure
 				// that the chunk holds enough bytes --> no lenChunk checking
-				if (epic_file_read(self->file,magicBytes,3) != 3) return RET_READ;
+				if (epic_file_read(self->file,magicBytes,3) != 3) return RET_FAPNG_READ;
 				self->lenChunk -= 3;
 				self->palette[k] = RGB565(magicBytes[0],magicBytes[1],magicBytes[2]);
 			}
@@ -1074,7 +1074,7 @@ int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
 					bytesPerPixel = 4;
 					break;
 				default:
-					return RET_BIT_DEPTH;
+					return RET_FAPNG_BIT_DEPTH;
 			}
 			break;
 		case COLOURTYPE__RGB_A:
@@ -1089,27 +1089,27 @@ int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
 					bytesPerPixel = 8;
 					break;
 				default:
-					return RET_BIT_DEPTH;
+					return RET_FAPNG_BIT_DEPTH;
 			}
 			break;
 		default:
-			return RET_COLOUR_TYPE;
+			return RET_FAPNG_COLOUR_TYPE;
 	}
 	// memorise bit depth and calculate worst-case scanline buffer size
 	uint16_t sizeScanline = SCANLINEBYTES(image->width,samplesPerPixel,bitDepth);
 	
 	// look for first IDAT chunk
 	retval = seekChunk(self,CHUNK_IDAT);
-	if (retval != RET_OK) return retval;
+	if (retval != RET_FAPNG_OK) return retval;
 	
 	// no image data yet: allocate memory for the image, with 16-bit pixels and one 8-bit alpha channel
 	if (image->rgb565 != NULL) free(image->rgb565);
 	image->rgb565 = (uint16_t*)malloc((image->width * image->height) << 1);
-	if (image->rgb565 == NULL) return RET_MALLOC_IMAGE;
+	if (image->rgb565 == NULL) return RET_FAPNG_MALLOC_IMAGE;
 	
 	if (image->alpha != NULL) free(image->alpha);
 	image->alpha = (uint8_t*)malloc(image->width * image->height);
-	if (image->alpha == NULL) return RET_MALLOC_IMAGE;
+	if (image->alpha == NULL) return RET_FAPNG_MALLOC_IMAGE;
 	
 	// allocate scanline buffers (largest dimension, kind of memory pool)
 	// w*spp*bpp --> bits --> bytes + 1 filter type byte
@@ -1119,13 +1119,13 @@ int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
 	self->scanlinePrevious = NULL;
 	
 	self->scanlineCurrent = (uint8_t*)malloc(sizeScanline);
-	if (self->scanlineCurrent == NULL) return RET_MALLOC_SCANLINE;
+	if (self->scanlineCurrent == NULL) return RET_FAPNG_MALLOC_SCANLINE;
 	
 	self->scanlinePrevious = (uint8_t*)malloc(sizeScanline);
 	if (self->scanlinePrevious == NULL) {
 		free(self->scanlineCurrent);
 		self->scanlineCurrent = NULL;
-		return RET_MALLOC_SCANLINE;
+		return RET_FAPNG_MALLOC_SCANLINE;
 	}
 	
 	// deal with interlacing (stored in magicBytes[4])
@@ -1216,7 +1216,7 @@ int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
 			// for every image row in the current subimage...
 			// 1) request bytes needed for the current pass and fill scanlineCurrent
 			retval = readScanline(self,sizeScanlineCurrent);
-			if (retval != RET_OK) return retval;
+			if (retval != RET_FAPNG_OK) return retval;
 			
 			// 2) apply filter type (byte0) to all bytes in scanlineCurrent
 			switch (self->scanlineCurrent[0]) {
@@ -1259,7 +1259,7 @@ int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
 				case FILTER_NONE:
 					break;
 				default:
-					return RET_FILTER_TYPE;
+					return RET_FAPNG_FILTER_TYPE;
 			}
 			
 			// 3) convert scanline bytes to pixels
@@ -1278,7 +1278,7 @@ int8_t pngDataRead(PngData *self, char *filename, Surface *image) {
 		pass = (pass > 0) ? pass + 1 : 8;
 	} while (pass < 8);
 	
-	return RET_OK;
+	return RET_FAPNG_OK;
 }
 
 //------------------------------------------------------------------------------
@@ -1294,7 +1294,7 @@ Surface *pngDataLoad(char *filename) {
 	
 	int retval = pngDataRead(data,filename,image);
 	pngDataDestruct(&data);
-	if (retval == RET_OK) {
+	if (retval == RET_FAPNG_OK) {
 		return image;
 	} else {
 		surfaceDestruct(&image);

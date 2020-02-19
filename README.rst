@@ -20,6 +20,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 Description
 ===========
 
@@ -32,11 +33,13 @@ Installation of the surfacedemo l0dable
 1) Get the card10 repo and set-up the toolchain (depends on your OS).
    Let's assume the local firmware repo lies at "$FIRMWARE"
 2) Create a directory "surfacedemo" below "$FIRMWARE/l0dables".
-3) Copy the following files to this directory "$FIRMWARE/l0dables/surfacedemo/":
+3) Copy the following files to the directory "$FIRMWARE/l0dables/surfacedemo/":
 
       surfacedemo.c, faFramebuffer.c, faFramebuffer.h, faReadPng.c, faReadPng.h
       faSurfaceBase.c, faSurfaceBase.h, faSurface.c, faSurface.h,
-      faSurfacePP.c, faSurfacePP.h, meson.build
+      faSurfacePP.c, faSurfacePP.h
+      
+   Copy "meson.surfacedemo.build" as "meson.build" to this directory.
 
 4) Edit "meson.build" in the directory "$FIRMWARE/l0dables" and add the
    following line:
@@ -48,23 +51,78 @@ Installation of the surfacedemo l0dable
       cd $FIRMWARE
       ninja -C build/
 
-6) Mount the card10 (assuming mountpoint "$MEDIACARD10").
-6.1) Create a directory "$MEDIACARD10/png/".
-6.2) Copy "$FIRMWARE/build/l0dables/surfacedemo/surfacedemo.elf" to 
-     ""$MEDIACARD10/apps".
-6.3) Copy the images to "$MEDIACARD10/png/":
+6) Mount card10 badge (assuming mountpoint "$MEDIACARD10").
+
+7) If not yet done: Create file "card10.cfg" in card10's root directory and add
+   the following line to it:
+      
+      execute_elf = true
+
+8) Create a directory "$MEDIACARD10/png/" and copy the following images to it:
 
       sprite-logo.png, sprite.png, stars.png, text.png, title.png
 
-6.4) "surfacedemo.elf" should now be available in the card10 menu.
+9) Copy "$FIRMWARE/build/l0dables/surfacedemo/surfacedemo.elf" to
+   "$MEDIACARD10/apps". The App "surfacedemo.elf" should now be available
+   in the card10 menu.
+
+
+Installation of the triangledemo l0dable
+========================================
+
+1) Get the card10 repo and set-up the toolchain (depends on your OS).
+   Let's assume the local firmware repo lies at "$FIRMWARE"
+2) Create a directory "triangledemo" below "$FIRMWARE/l0dables".
+3) Copy the following files to the directory "$FIRMWARE/l0dables/triangledemo/":
+
+      triangledemo.c, faFramebuffer.c, faFramebuffer.h, faReadPng.c, faReadPng.h
+      faSurfaceBase.c, faSurfaceBase.h, faSurface.c, faSurface.h
+      
+   Copy "meson.triangledemo.build" as "meson.build" to this directory.
+
+4) Edit "meson.build" in the directory "$FIRMWARE/l0dables" and add the
+   following line:
+
+      subdir('triangledemo/')
+
+5) Compile the firmware; this will now build triangledemo, too:
+
+      cd $FIRMWARE
+      ninja -C build/
+
+6) Mount card10 badge (assuming mountpoint "$MEDIACARD10").
+
+7) If not yet done: Create file "card10.cfg" in card10's root directory and add
+   the following line to it:
+      
+      execute_elf = true
+
+8) Create a directory "$MEDIACARD10/png/" and copy the following images to it:
+
+      stars.png
+
+9) Copy "$FIRMWARE/build/l0dables/surfacedemo/triangledemo.elf" to
+   "$MEDIACARD10/apps". The App "triangledemo.elf" should now be available
+   in the card10 menu.
 
 
 Changelog
 =========
 
+2020-02-17
+    created triangledemo
+
+2020-02-14
+    implemented disc (untested)
+
+2020-02-12
+    implemented triangle and rectangle
+    changed meaning of return value bounding box: now not clipped to surface (mask tracks modifications)
+    simplified normalisation/denormalisation in integer math: shifts instead of divs and muls
+
 2020-02-06
-	changed SurfaceMod to an even simpler format because processing mask pixels took longer than simply redrawing the display :(
-	
+    changed SurfaceMod to an even simpler format because processing mask pixels took longer than simply redrawing the display :(
+
 2020-02-05
     changed SurfaceMod to a simpler format
     reduced size of width/height to uint8_t (limiting images to 255*255, ok for card10's screen)

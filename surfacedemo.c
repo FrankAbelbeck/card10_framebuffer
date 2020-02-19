@@ -1,7 +1,7 @@
 /**
  * @file
  * @author Frank Abelbeck <frank.abelbeck@googlemail.com>
- * @version 2020-02-06
+ * @version 2020-02-14
  * 
  * @section License
  * 
@@ -188,7 +188,7 @@ int main(int argc, char **argv) {
 	p.y = 40;
 	
 	printf("loop: rotating/moving sprites...\n");
-	for (uint16_t counter = 0; counter < 1000; counter++) {
+	for (uint16_t counter = 0; counter < 768; counter++) {
 		// update motion variables
 		x += dx;
 		y += dy;
