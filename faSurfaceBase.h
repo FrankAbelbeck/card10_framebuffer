@@ -46,10 +46,10 @@
 // macro functions
 //------------------------------------------------------------------------------
 
-#define GETRED(x)       ( (uint8_t)( ( (x) >> 11 ) & 0x1f ) )
-#define GETGREEN(x)     ( (uint8_t)( ( (x) >> 5 )  & 0x3f ) )
-#define GETBLUE(x)      ( (uint8_t)(   (x)         & 0x1f ) )
-#define MKRGB565(r,g,b) ( (uint16_t)( (((r) >> 3) & 0x1f) << 11 | (((g) >> 2) & 0x3f) << 5 | (((b) >> 3) & 0x1f) ) )
+#define GETRED(x)       ( (uint8_t)( ( (x) >> 11 ) & 0x1f ) ) ///< get red component of an RGB565 colour value
+#define GETGREEN(x)     ( (uint8_t)( ( (x) >> 5 )  & 0x3f ) ) ///< get green component of an RGB565 colour value
+#define GETBLUE(x)      ( (uint8_t)(   (x)         & 0x1f ) ) ///< get blue component of an RGB565 colour value
+#define MKRGB565(r,g,b) ( (uint16_t)( (((r) >> 3) & 0x1f) << 11 | (((g) >> 2) & 0x3f) << 5 | (((b) >> 3) & 0x1f) ) ) ///< calculate an RGB565 colour value from components red/green/blue (each in range [0,255])
 
 //------------------------------------------------------------------------------
 // data structures
@@ -140,13 +140,25 @@ void surfaceClear(Surface *surface, uint16_t colour, uint8_t alpha);
  */
 Surface *surfaceClone(Surface *surface);
 
-/** Copy part of one surface onto another.
+/** Copy source surface onto destination surface according to the changes recorded in mask.
+ * 
+ * Dimensions must match!
  * 
  * @param source Pointer to a Surface structure.
  * @param destination Pointer to a Surface structure.
- * @param boundingBox A BoundingBox structure; area to copy.
+ * @param mask Pointer to a SurfaceMod structure.
  */
-void surfaceCopy(Surface *source, Surface *destination, SurfaceMod *mask);
+void surfaceCopyMask(Surface *source, Surface *destination, SurfaceMod *mask);
+
+/** Copy one surface onto another at a given position.
+ * 
+ * @param source Pointer to a Surface structure.
+ * @param destination Pointer to a Surface structure.
+ * @param p A Point structure; upper left starting point on the distination surface.
+ * @param mode A mode as defined by BLEND_*
+ * @param mask Pointer to a SurfaceMod structure where changes to the destination surface are recorded.
+ */
+void surfaceBlendPosition(Surface *source, Surface *destination, Point p, uint8_t mode, SurfaceMod *mask);
 
 /** Create a new BoundingBox with given coordinates.
  * 
@@ -205,6 +217,14 @@ void surfaceModSetSeq(SurfaceMod *mask, uint8_t x, uint8_t y, uint8_t len);
  */
 void surfaceModSetRow(SurfaceMod *mask, uint8_t y, uint32_t bitmask);
 
+/** Set an entire column bitmask in the given SurfaceMod structure.
+ * 
+ * @param mask Pointer to a SurfaceMod structure.
+ * @param x Number of the column.
+ * @param bitmask A 32 bit bitmask.
+ */
+void surfaceModSetCol(SurfaceMod *mask, uint8_t x, uint32_t bitmask);
+
 /** Set a pixel in the given SurfaceMod structure.
  * 
  * @param mask Pointer to a SurfaceMod structure.
@@ -226,12 +246,12 @@ Point createPoint(int32_t x, int32_t y);
 /** Draw a point onto the given surface, compositing pixel values with the given blend mode. 
  * 
  * @param surface Pointer to a Surface structure to be modified.
- * @param p A Point structure, starting point.
+ * @param p A Point structure.
  * @param colour Colour of the contour, RGB565 format.
  * @param alpha Transparency value of the contour, in range 0..255.
  * @param mode A mode as defined by BLEND_*
  * @param mask Pointer to a SurfaceMod structure where changes to the surface are recorded.
- * @returns A BoundingBox structure describing the smalles box enclosing this point.
+ * @returns A BoundingBox structure describing the smallest box enclosing this point.
  */
 BoundingBox surfaceDrawPoint(Surface *surface, Point p, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask);
 
@@ -244,7 +264,7 @@ BoundingBox surfaceDrawPoint(Surface *surface, Point p, uint16_t colour, uint8_t
  * @param alpha Transparency value of the line, in range 0..255.
  * @param mode A mode as defined by BLEND_*
  * @param mask Pointer to a SurfaceMod structure where changes to the surface are recorded.
- * @returns A BoundingBox structure describing the smalles box enclosing this line.
+ * @returns A BoundingBox structure describing the smallest box enclosing this line.
  */
 BoundingBox surfaceDrawLine(Surface *surface, Point p0, Point p1, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask);
 
@@ -257,7 +277,7 @@ BoundingBox surfaceDrawLine(Surface *surface, Point p0, Point p1, uint16_t colou
  * @param alpha Transparency value of the circle, in range 0..255.
  * @param mode A mode as defined by BLEND_*
  * @param mask Pointer to a SurfaceMod structure where changes to the surface are recorded.
- * @returns A BoundingBox structure describing the smalles box enclosing this circle.
+ * @returns A BoundingBox structure describing the smallest box enclosing this circle.
  */
 BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask);
 
@@ -272,7 +292,7 @@ BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint1
  * @param alpha Transparency value of the arc, in range 0..255.
  * @param mode A mode as defined by BLEND_*
  * @param mask Pointer to a SurfaceMod structure where changes to the surface are recorded.
- * @returns A BoundingBox structure describing the smalles box enclosing this arc.
+ * @returns A BoundingBox structure describing the smallest box enclosing this arc.
  */
 BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t angleStart, int16_t angleStop, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask);
 
@@ -288,7 +308,7 @@ BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t 
  * @param alpha Transparency value of the sector, in range 0..255.
  * @param mode A mode as defined by BLEND_*
  * @param mask Pointer to a SurfaceMod structure where changes to the surface are recorded.
- * @returns A BoundingBox structure describing the smalles box enclosing this sector.
+ * @returns A BoundingBox structure describing the smallest box enclosing this sector.
  */
 BoundingBox surfaceDrawSector(Surface *surface, Point pm, uint16_t radiusOuter, uint16_t radiusInner, int16_t angleStart, int16_t angleStop, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask);
 
@@ -302,7 +322,7 @@ BoundingBox surfaceDrawSector(Surface *surface, Point pm, uint16_t radiusOuter, 
  * @param alpha Transparency value of the triangle, in range 0..255.
  * @param mode A mode as defined by BLEND_*
  * @param mask Pointer to a SurfaceMod structure where changes to the surface are recorded.
- * @returns A BoundingBox structure describing the smalles box enclosing this triangle.
+ * @returns A BoundingBox structure describing the smallest box enclosing this triangle.
  */
 BoundingBox surfaceDrawTriangle(Surface *surface, Point p0, Point p1, Point p2, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask);
 
@@ -315,7 +335,7 @@ BoundingBox surfaceDrawTriangle(Surface *surface, Point p0, Point p1, Point p2, 
  * @param alpha Transparency value of the rectangle, in range 0..255.
  * @param mode A mode as defined by BLEND_*
  * @param mask Pointer to a SurfaceMod structure where changes to the surface are recorded.
- * @returns A BoundingBox structure describing the smalles box enclosing this rectangle.
+ * @returns A BoundingBox structure describing the smallest box enclosing this rectangle.
  */
 BoundingBox surfaceDrawRectangle(Surface *surface, Point p0, Point p1, uint16_t colour, uint8_t alpha, uint8_t mode, SurfaceMod *mask); 
 
@@ -366,7 +386,7 @@ int16_t surfaceArcusCosine(int16_t x);
  * @param mode A mode as defined by BLEND_*.
  * @returns Boolean value, true if result differs from B.
  */
-bool surfaceBlend(uint16_t colourA, uint8_t alphaA, uint16_t colourB, uint8_t alphaB, uint16_t *colourResult, uint8_t *alphaResult, uint8_t mode);
+bool surfacePixelBlend(uint16_t colourA, uint8_t alphaA, uint16_t colourB, uint8_t alphaB, uint16_t *colourResult, uint8_t *alphaResult, uint8_t mode);
 
 
 void printInt(int32_t value);

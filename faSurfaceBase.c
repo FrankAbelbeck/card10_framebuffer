@@ -100,7 +100,7 @@ void surfaceClear(Surface *surface, uint16_t colour, uint8_t alpha) {
 	} while (i > 0);
 }
 
-void surfaceCopy(Surface *source, Surface *destination, SurfaceMod *mask) {
+void surfaceCopyMask(Surface *source, Surface *destination, SurfaceMod *mask) {
 	// sanity check: surfaces should exist and dimensions should match
 	if (source == NULL || destination == NULL || mask == NULL || source->width != destination->width || source->height != destination->height || source->height > mask->height) return;
 	
@@ -121,6 +121,71 @@ void surfaceCopy(Surface *source, Surface *destination, SurfaceMod *mask) {
 				destination->alpha[i]  = source->alpha[i];
 			}
 			i++;
+		}
+	}
+}
+
+void surfaceBlendPosition(Surface *source, Surface *destination, Point p, uint8_t mode, SurfaceMod *mask) {
+	// sanity check: surfaces and mask should exist
+	if (source == NULL || destination == NULL || mask == NULL ) return;
+	
+	int16_t xStartSource,yStartSource,xStartDestination,yStartDestination,width,height;
+	uint8_t x,y,xDestination;
+	uint16_t iSource,iDestination,diSource,diDestination;
+	uint32_t bitmask;
+	
+	// edit starting point and dimensions so that rendering starts
+	// and ends inside the visible surface area
+	width = source->width;
+	if (p.x < 0) {
+		xStartSource = -p.x;
+		xStartDestination = 0;
+		width += p.x;
+	} else { 
+		xStartSource = 0;
+		xStartDestination = p.x;
+	}
+	if (xStartDestination + width > destination->width) {
+		width = destination->width - xStartDestination;
+	}
+	
+	height = source->height;
+	if (p.y < 0) {
+		yStartSource = -p.y;
+		yStartDestination = 0;
+		height += p.x;
+	} else { 
+		yStartSource = 0;
+		yStartDestination = p.y;
+	}
+	if (yStartDestination + height > destination->height) {
+		height = destination->height - yStartDestination;
+	}
+	
+	if (width > 0 && height > 0) {
+		// character at least partial visible: draw it
+		iSource = yStartSource * source->width + xStartSource;
+		diSource = source->width - width;
+		iDestination = yStartDestination * destination->width + xStartDestination;
+		diDestination = destination->width - width;
+		for (y = 0; y < height; y++) {
+			bitmask = 0;
+			xDestination = xStartDestination;
+			for (x = 0; x < width; x++) {
+				// blend foreground colour
+				if (surfacePixelBlend(
+						source->rgb565[iSource],source->alpha[iSource],
+						destination->rgb565[iDestination],destination->alpha[iDestination],
+						&destination->rgb565[iDestination],&destination->alpha[iDestination],
+						mode)) bitmask |= 1 << (xDestination >> 3); // pixel changed: mark in bitmask
+				iSource++;
+				iDestination++;
+				xDestination++;
+			}
+			surfaceModSetRow(mask,yStartDestination,bitmask);
+			yStartDestination++;
+			iSource += diSource;
+			iDestination += diDestination;
 		}
 	}
 }
@@ -193,6 +258,15 @@ void surfaceModSetRow(SurfaceMod *mask, uint8_t y, uint32_t bitmask) {
 	mask->tile[y >> 3] |= bitmask;
 }
 
+void surfaceModSetCol(SurfaceMod *mask, uint8_t x, uint32_t bitmask) {
+	if (mask == NULL) return;
+	uint8_t iMax = mask->height >> 3;
+	uint32_t xBitmask = 1 << (x >> 3);
+	for (uint8_t i = 0; i < iMax; i++)
+		if (bitmask & (1 << i))
+			mask->tile[i] |= xBitmask;
+}
+
 void surfaceModSetPixel(SurfaceMod *mask, uint8_t x, uint8_t y) {
 	if (mask == NULL || y >= mask->height) return;
 	mask->tile[y >> 3] |= 1 << (x >> 3);
@@ -209,7 +283,7 @@ BoundingBox surfaceDrawPoint(Surface *surface, Point p, uint16_t colour, uint8_t
 	if (p.x >= 0 && p.x < surface->width && p.y >= 0 && p.y < surface->height) {
 		// pixel visible, draw it
 		uint32_t i = p.y * surface->width + p.x;
-		if (surfaceBlend(
+		if (surfacePixelBlend(
 			colour,alpha,
 			surface->rgb565[i],surface->alpha[i],
 			&surface->rgb565[i],&surface->alpha[i],
@@ -268,7 +342,7 @@ BoundingBox surfaceDrawLine(Surface *surface, Point p0, Point p1, uint16_t colou
 		if (p0.x >= 0 && p0.x < surface->width && p0.y >= 0 && p0.y < surface->height) {
 			// pixel visible: calculate new index and record in mask if blending modified the surface
 			i = p0.y * surface->width + p0.x;	
-			if (surfaceBlend(
+			if (surfacePixelBlend(
 				colour,alpha,
 				surface->rgb565[i],surface->alpha[i],
 				&surface->rgb565[i],&surface->alpha[i],
@@ -338,7 +412,7 @@ BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint1
 				// set pixel in octant 1 (x+xMod,y+yMod)
 				// drawing direction: from 90° to 45°
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -349,7 +423,7 @@ BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint1
 				// set pixel in octant 2 (x-xMod,y+yMod)
 				// drawing direction: from 90° to 135°
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -364,7 +438,7 @@ BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint1
 				// set pixel in octant 6 (x+xMod,y-yMod)
 				// drawing direction: from 270° to 315°
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -375,7 +449,7 @@ BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint1
 				// set pixel in octant 5 (x-xMod,y-yMod)
 				// drawing direction: from 270° to 225°
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -390,7 +464,7 @@ BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint1
 				// set pixel in octant 0 (x+yMod,y+xMod)
 				// drawing direction: from 0° to 45°
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -401,7 +475,7 @@ BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint1
 				// set pixel in octant 3 (x-yMod,y+xMod)
 				// drawing direction: from 180° to 135°
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -416,7 +490,7 @@ BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint1
 				// set pixel in octant 7 (x+yMod,y-xMod)
 				// drawing direction: from 360° to 315°
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -427,7 +501,7 @@ BoundingBox surfaceDrawCircle(Surface *surface, Point pm, uint16_t radius, uint1
 				// set pixel in octant 4 (x-yMod,y-xMod)
 				// drawing direction: from 180° to 225°
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -507,7 +581,7 @@ BoundingBox surfaceDrawDisc(Surface *surface, Point pm, uint16_t radius, uint16_
 				iMax = i + xEnd;
 				bitmask = 0;
 				for (i += xStart; i <= iMax; i++) {
-					if (surfaceBlend(
+					if (surfacePixelBlend(
 						colour,alpha,
 						surface->rgb565[i],surface->alpha[i],
 						&surface->rgb565[i],&surface->alpha[i],
@@ -522,7 +596,7 @@ BoundingBox surfaceDrawDisc(Surface *surface, Point pm, uint16_t radius, uint16_
 				iMax = i + xEnd;
 				bitmask = 0;
 				for (i += xStart; i <= iMax; i++) {
-					if (surfaceBlend(
+					if (surfacePixelBlend(
 						colour,alpha,
 						surface->rgb565[i],surface->alpha[i],
 						&surface->rgb565[i],&surface->alpha[i],
@@ -550,7 +624,7 @@ BoundingBox surfaceDrawDisc(Surface *surface, Point pm, uint16_t radius, uint16_
 			iMax = i + xEnd;
 			bitmask = 0;
 			for (i += xStart; i <= iMax; i++) {
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -565,7 +639,7 @@ BoundingBox surfaceDrawDisc(Surface *surface, Point pm, uint16_t radius, uint16_
 			iMax = i + xEnd;
 			bitmask = 0;
 			for (i += xStart; i <= iMax; i++) {
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -653,7 +727,7 @@ BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t 
 			if (octants & 2 && pTemp.y >= 0 && pTemp.y < surface->height && \
 				(octantStart != 1 || p.x <= xStart) && (octantStop != 1 || p.x >= xStop) ) {
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -665,7 +739,7 @@ BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t 
 			if (octants & 64 && pTemp.y >= 0 && pTemp.y < surface->height && \
 				(octantStart != 6 || p.x >= xStart) && (octantStop != 6 || p.x <= xStop) ) {
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -681,7 +755,7 @@ BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t 
 			if (octants & 4 && pTemp.y >= 0 && pTemp.y < surface->height && \
 				(octantStart != 2 || -p.x <= xStart) && (octantStop != 2 || -p.x >= xStop) ) {
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -693,7 +767,7 @@ BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t 
 			if (octants & 32 && pTemp.y >= 0 && pTemp.y < surface->height && \
 				(octantStart != 5 || -p.x >= xStart) && (octantStop != 5 || -p.x <= xStop) ) {
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -709,7 +783,7 @@ BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t 
 			if (octants & 1 && pTemp.y >= 0 && pTemp.y < surface->height && \
 				(octantStart != 0 || p.x >= yStart) && (octantStop != 0 || p.x <= yStop) ) {
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -721,7 +795,7 @@ BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t 
 			if (octants & 128 && pTemp.y >= 0 && pTemp.y < surface->height && \
 				(octantStart != 7 || -p.x >= yStart) && (octantStop != 7 || -p.x <= yStop) ) {
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -736,7 +810,7 @@ BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t 
 			if (octants & 8 && pTemp.y >= 0 && pTemp.y < surface->height && \
 				(octantStart != 3 || p.x <= yStart) && (octantStop != 3 || p.x >= yStop) ) {
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -748,7 +822,7 @@ BoundingBox surfaceDrawArc(Surface *surface, Point pm, uint16_t radius, int16_t 
 			if (octants & 16 && pTemp.y >= 0 && pTemp.y < surface->height && \
 				(octantStart != 4 || -p.x <= yStart) && (octantStop != 4 || -p.x >= yStop) ) {
 				i = pTemp.y * surface->width + pTemp.x;
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -846,7 +920,7 @@ void surfaceDrawTriangleFlatTop(Surface *surface, Point p0, Point p1, Point p2, 
 			bitmask = 0;
 			iMax = iRow + p1.x;
 			for (i = iRow + p0.x; i <= iMax; i++) {
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -951,7 +1025,7 @@ void surfaceDrawTriangleFlatBottom(Surface *surface, Point p0, Point p1, Point p
 			bitmask = 0;
 			iMax = iRow + p1.x;
 			for (i = iRow + p0.x; i <= iMax; i++) {
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -1034,7 +1108,7 @@ BoundingBox surfaceDrawTriangle(Surface *surface, Point p0, Point p1, Point p2, 
 			uint32_t bitmask = 0;
 			p0.x = bb.min.x;
 			for (i += bb.min.x; i <= iMax; i++) {
-				if (surfaceBlend(
+				if (surfacePixelBlend(
 					colour,alpha,
 					surface->rgb565[i],surface->alpha[i],
 					&surface->rgb565[i],&surface->alpha[i],
@@ -1109,7 +1183,7 @@ BoundingBox surfaceDrawRectangle(Surface *surface, Point p0, Point p1, uint16_t 
 	for (y = yMin; y <= yMax; y++) {
 		bitmask = 0;
 		for (x = xMin; x <= xMax; x++) {
-			if (surfaceBlend(
+			if (surfacePixelBlend(
 				colour,alpha,
 				surface->rgb565[i],surface->alpha[i],
 				&surface->rgb565[i],&surface->alpha[i],
@@ -1497,7 +1571,7 @@ int16_t surfaceArcusCosine(int16_t x) {
 // Image composition function for alpha blending a colour component of a pixel
 // of surface A with a colour component of a pixel of surface B.
 // operation: result = a op b (mode defines op)
-bool surfaceBlend(uint16_t colourA, uint8_t alphaA, uint16_t colourB, uint8_t alphaB, uint16_t *colourResult, uint8_t *alphaResult, uint8_t mode) {
+bool surfacePixelBlend(uint16_t colourA, uint8_t alphaA, uint16_t colourB, uint8_t alphaB, uint16_t *colourResult, uint8_t *alphaResult, uint8_t mode) {
 	uint8_t F_A,F_B, alphaC;
 	uint16_t alpha,colourC;
 	uint32_t colour;
@@ -1557,14 +1631,19 @@ bool surfaceBlend(uint16_t colourA, uint8_t alphaA, uint16_t colourB, uint8_t al
 }
 
 
+//------------------------------------------------------------------------------
+// DEBUG: print integer (since printf with %i is broken on my system)
+//------------------------------------------------------------------------------
+
 void printInt(int32_t value) {
  	char result[12] = "           \0";
+	char sign;
 	const char digits[10] = "0123456789";
 	if (value < 0) {
-		result[0] = '-';
+		sign = '-';
 		value = -value;
 	} else {
-		result[0] = '+';
+		sign = '+';
 		value = value;
 	}
 	uint8_t i = 10;
@@ -1573,5 +1652,6 @@ void printInt(int32_t value) {
 		value /= 10;
 		i--;
 	} while (value != 0 && i > 0);
-	printf("%s",result);
+	result[i] = sign;
+	fputs(result,stdout);
 }

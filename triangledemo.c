@@ -243,7 +243,7 @@ int main(int argc, char **argv) {
 				pLight = rotate3D(lightSource,0,pitchLight,0);
 				shading = surfaceArcusCosine((p.x * pLight.x + p.y * pLight.y + p.z * pLight.z) >> 10);
 				if (shading >= 90) shading = 255; else shading = 255*shading/90;
-				surfaceBlend(0,shading,triangles[k].colour,triangles[k].alpha,&colour,&alpha,BLEND_OVER);
+				surfacePixelBlend(0,shading,triangles[k].colour,triangles[k].alpha,&colour,&alpha,BLEND_OVER);
 			} else {
 				colour = triangles[k].colour;
 				alpha = triangles[k].alpha;
@@ -283,7 +283,7 @@ int main(int argc, char **argv) {
 		// update framebuffer
 		framebufferCopySurface(framebuffer,frontbuffer);
 		framebufferRedraw(framebuffer);
-		surfaceCopy(background,frontbuffer,mask);
+		surfaceCopyMask(background,frontbuffer,mask);
 		surfaceModClear(mask);
 		
 		buttons = epic_buttons_read(BUTTON_LEFT_BOTTOM | BUTTON_RIGHT_BOTTOM | BUTTON_LEFT_TOP | BUTTON_RIGHT_TOP);

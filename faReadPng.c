@@ -311,7 +311,7 @@ int8_t readBytesIDAT(PngData *self, uint8_t *buffer, uint16_t numBytes) {
 		if (self->lenChunk < numBytesRemaining) {
 			// chunk holds fewer bytes than needed:
 			// read only lenChunk bytes, update bytes counters and seek new IDAT chunk
-			if (epic_file_read(self->file,&buffer[numBytesRead],self->lenChunk) != self->lenChunk) return RET_FAPNG_READ;
+			if ((uint32_t)epic_file_read(self->file,&buffer[numBytesRead],self->lenChunk) != self->lenChunk) return RET_FAPNG_READ;
 			numBytesRemaining -= self->lenChunk;
 			numBytesRead += self->lenChunk;
 			self->lenChunk = 0;
@@ -320,7 +320,7 @@ int8_t readBytesIDAT(PngData *self, uint8_t *buffer, uint16_t numBytes) {
 		} else {
 			// chunk holds enough bytes to satisfy request:
 			// read request number of bytes and 
-			if (epic_file_read(self->file,&buffer[numBytesRead],numBytesRemaining) != numBytesRemaining) return RET_FAPNG_READ;
+			if ((uint32_t)epic_file_read(self->file,&buffer[numBytesRead],numBytesRemaining) != numBytesRemaining) return RET_FAPNG_READ;
 			numBytesRead += numBytesRemaining;
 			self->lenChunk -= numBytesRemaining;
 			numBytesRemaining = 0;

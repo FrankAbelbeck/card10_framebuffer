@@ -24,12 +24,13 @@
  */
 #include <stdio.h> // uses printf()
 
-#include "epicardium.h" // card10 API access
-
 #include "faSurface.h" // custom bitmap surface lib
 #include "faSurfacePP.h" // custom bitmap surface lib (perspective projection)
 #include "faFramebuffer.h" // custom framebuffer access lib
 #include "faReadPng.h" // custom PNG reader lib
+
+#include "epicardium.h" // card10 API access
+#include "FreeRTOS.h" // needed for access to vTaskDelay() and pdMS_TO_TICKS() in FreeRTOS SDK
 
 void updateLED(uint8_t load) {
 	// simple load colouring: red increases, green decreases --> green/yellow/red
@@ -118,7 +119,7 @@ int main(int argc, char **argv) {
 		
 		framebufferCopySurface(framebuffer,frontbuffer);
 		framebufferRedraw(framebuffer);
-		surfaceCopy(background,frontbuffer,mask);
+		surfaceCopyMask(background,frontbuffer,mask);
 		surfaceModClear(mask);
 	}
 	
@@ -146,7 +147,7 @@ int main(int argc, char **argv) {
 		
 		framebufferCopySurface(framebuffer,frontbuffer);
 		framebufferRedraw(framebuffer);
-		surfaceCopy(background,frontbuffer,mask);
+		surfaceCopyMask(background,frontbuffer,mask);
 		surfaceModClear(mask);
 	}
 	
@@ -219,7 +220,7 @@ int main(int argc, char **argv) {
 		
 		framebufferCopySurface(framebuffer,frontbuffer);
 		framebufferRedraw(framebuffer);
-		surfaceCopy(background,frontbuffer,mask);
+		surfaceCopyMask(background,frontbuffer,mask);
 		surfaceModClear(mask);
 		
 		// check clipping

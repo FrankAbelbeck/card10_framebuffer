@@ -27,26 +27,21 @@ Description
 Collection of routines for manipulation of a card10 badge framebuffer.
 
 
-Installation of the surfacedemo l0dable
-=======================================
+General l0dable Installation Routine
+====================================
 
 1) Get the card10 repo and set-up the toolchain (depends on your OS).
    Let's assume the local firmware repo lies at "$FIRMWARE"
-2) Create a directory "surfacedemo" below "$FIRMWARE/l0dables".
-3) Copy the following files to the directory "$FIRMWARE/l0dables/surfacedemo/":
-
-      surfacedemo.c, faFramebuffer.c, faFramebuffer.h, faReadPng.c, faReadPng.h
-      faSurfaceBase.c, faSurfaceBase.h, faSurface.c, faSurface.h,
-      faSurfacePP.c, faSurfacePP.h
-      
-   Copy "meson.surfacedemo.build" as "meson.build" to this directory.
+2) Create a new directory PROGNAME below "$FIRMWARE/l0dables".
+3) Copy the specified files to said directory "$FIRMWARE/l0dables/PROGNAME/".
+   Copy "meson.PROGNAME.build" as "meson.build" to this directory.
 
 4) Edit "meson.build" in the directory "$FIRMWARE/l0dables" and add the
    following line:
 
-      subdir('surfacedemo/')
+      subdir('PROGNAME/')
 
-5) Compile the firmware; this will now build surfacedemo, too:
+5) Compile the firmware; this will now build the newly included l0dable, too:
 
       cd $FIRMWARE
       ninja -C build/
@@ -58,56 +53,87 @@ Installation of the surfacedemo l0dable
       
       execute_elf = true
 
-8) Create a directory "$MEDIACARD10/png/" and copy the following images to it:
+8) Copy "$FIRMWARE/build/l0dables/DIRNAME/PROGNAME.elf" to
+   "$MEDIACARD10/apps". The App "PROGNAME.elf" should now be available
+   in the card10 menu.
+
+
+Installation of the surfacedemo l0dable
+=======================================
+
+Follow general installation instructions as stated above. Modify and extend them
+as follows.
+
+2) Use PROGNAME=surfacedemo
+
+3) Files to copy:
+
+   surfacedemo.c, faFramebuffer.c, faFramebuffer.h, faReadPng.c, faReadPng.h
+   faSurfaceBase.c, faSurfaceBase.h, faSurface.c, faSurface.h,
+   faSurfacePP.c, faSurfacePP.h
+      
+9) Create a directory "$MEDIACARD10/png/" (if not yet existent) and copy the
+   following images to it:
 
       sprite-logo.png, sprite.png, stars.png, text.png, title.png
-
-9) Copy "$FIRMWARE/build/l0dables/surfacedemo/surfacedemo.elf" to
-   "$MEDIACARD10/apps". The App "surfacedemo.elf" should now be available
-   in the card10 menu.
 
 
 Installation of the triangledemo l0dable
 ========================================
 
-1) Get the card10 repo and set-up the toolchain (depends on your OS).
-   Let's assume the local firmware repo lies at "$FIRMWARE"
-2) Create a directory "triangledemo" below "$FIRMWARE/l0dables".
-3) Copy the following files to the directory "$FIRMWARE/l0dables/triangledemo/":
+Follow general installation instructions as stated above. Modify and extend them
+as follows.
+
+2) Use PROGNAME=triangledemo
+
+3) Files to copy:
 
       triangledemo.c, faFramebuffer.c, faFramebuffer.h, faReadPng.c, faReadPng.h
       faSurfaceBase.c, faSurfaceBase.h, faSurface.c, faSurface.h
       
-   Copy "meson.triangledemo.build" as "meson.build" to this directory.
-
-4) Edit "meson.build" in the directory "$FIRMWARE/l0dables" and add the
-   following line:
-
-      subdir('triangledemo/')
-
-5) Compile the firmware; this will now build triangledemo, too:
-
-      cd $FIRMWARE
-      ninja -C build/
-
-6) Mount card10 badge (assuming mountpoint "$MEDIACARD10").
-
-7) If not yet done: Create file "card10.cfg" in card10's root directory and add
-   the following line to it:
-      
-      execute_elf = true
-
-8) Create a directory "$MEDIACARD10/png/" and copy the following images to it:
+9) Create a directory "$MEDIACARD10/png/" (if not yet existent) and copy the
+   following image to it:
 
       stars.png
 
-9) Copy "$FIRMWARE/build/l0dables/surfacedemo/triangledemo.elf" to
-   "$MEDIACARD10/apps". The App "triangledemo.elf" should now be available
-   in the card10 menu.
+
+Installation of the fontdemo l0dable
+====================================
+
+Follow general installation instructions as stated above. Modify and extend them
+as follows.
+
+2) Use PROGNAME=fontdemo
+
+3) Files to copy:
+
+      fontdemo.c, faFramebuffer.c, faFramebuffer.h,
+      faSurfaceBase.c, faSurfaceBase.h, faSurface.c, faSurface.h,
+      faReadPng.h, faReadPng.c, faFontFile.h, faFontFile.c
+
+9) Create a directory "$MEDIACARD10/png/" (if not yet existent) and copy the
+   following files to it:
+
+      faTinyFont.bin, earthrise.png
 
 
 Changelog
 =========
+
+2020-03-22
+    release of fontdemo
+
+2020-03-11
+    revised toolchain for faFontFile handling: merged into one program faFFTool.py
+    faFontFile format creation now done via "faFFTool.py create" (image-based symbol definition + text file code mapping)
+    faFontFile format checking now done via "faFFTool.py check"
+    faFontFile format rendering now possible via "faFFTool.py render"
+
+2020-03-07
+    bitmap font library reaches beta state
+    
+2020-03-06
+    bitmap font library reaches alpha state
 
 2020-02-17
     created triangledemo

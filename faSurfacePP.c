@@ -344,7 +344,7 @@ BoundingBox composePP(Surface *surface, Surface *sprite, Surface *destination, M
 					// 5) calculate pixel index
 					iSprite = pMod.y * sprite->width + pMod.x;
 					// 6) blend pixel (destination = sprite op surface) and add pixel to mask if destination was changed
-					if (surfaceBlend(
+					if (surfacePixelBlend(
 						sprite->rgb565[iSprite],(alpha * sprite->alpha[iSprite]) >> 8,
 						surface->rgb565[iSurface],surface->alpha[iSurface],
 						&destination->rgb565[iSurface],&destination->alpha[iSurface],
